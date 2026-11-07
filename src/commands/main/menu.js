@@ -33,7 +33,7 @@ ${list(['sticker', 'toimg', 'take', 'vv', 'react', 'setdp', 'getdp', 'img', 'cal
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 sᴇᴀʀᴄʜ & ᴀɪ 〕━━━━━━
-${list(['ai', 'gpt', 'weather', 'lyrics'])}
+${list(['ai', 'gpt', 'weather', 'lyrics', 'githubstalk', 'igstalk', 'tiktokstalk'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴅᴏᴡɴʟᴏᴀᴅ 〕━━━━━━
