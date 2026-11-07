@@ -17,6 +17,54 @@ const CHANNELS = [
   '0029VbEJXWTChq6TrB91xQ0t'
 ]
 
+const reactedStatuses = new Set()
+const userCooldowns = new Map() // Tracks the last time we reacted to a user
+
+let statusQueue = Promise.resolve()
+
+async function processStatus(sock, msg) {
+  try {
+    const key = msg.key
+    const participant = key?.participant || key?.remoteJid
+    if (!key?.id || !participant || key.fromMe) return
+
+    const statusId = `${participant}:${key.id}`
+    if (reactedStatuses.has(statusId)) return
+
+    // COOLDOWN CHECK: Only react once every 10 seconds per user
+    const now = Date.now()
+    const lastReaction = userCooldowns.get(participant) || 0
+    if (now - lastReaction < 10000) return // Skip if reacted recently
+
+    // 1. Auto View
+    if (config.settings.autoStatus) {
+      await sock.readMessages([key]).catch(() => {})
+    }
+
+    // 2. Auto React
+    if (config.settings.statusReact) {
+      const statusEmojis = ['❤️', '🔥', '👏', '💯', '🤩', '😍', '💪', '🎉', '✨', '👀', '🚀', '✅', '👌', '🙌', '💖', '🌟']
+      const randomEmoji = statusEmojis[Math.floor(Math.random() * statusEmojis.length)]
+
+      await sock.sendMessage('status@broadcast', {
+        react: { text: randomEmoji, key: key }
+      }, {
+        statusJidList: [participant]
+      }).catch(() => {})
+
+      reactedStatuses.add(statusId)
+      userCooldowns.set(participant, now) // Update cooldown
+      
+      logger.info(`❤️ Auto-reacted to status from ${participant} with ${randomEmoji}`)
+      
+      if (reactedStatuses.size > 5000) reactedStatuses.clear()
+      if (userCooldowns.size > 1000) userCooldowns.clear()
+    }
+  } catch (error) {
+    logger.error(`Status processing failed: ${error.message}`)
+  }
+}
+
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState(config.sessionDir)
   const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }))
@@ -28,20 +76,27 @@ async function connectToWhatsApp() {
     printQRInTerminal: false,
     browser: Browsers.ubuntu('Chrome'),
     syncFullHistory: false,
-    markOnlineOnConnect: true, // ALWAYS ONLINE
+    markOnlineOnConnect: true,
     generateHighQualityLinkPreview: true
   })
 
   sock.ev.on('creds.update', saveCreds)
 
-  // Keep Alive Ping every 4 minutes to prevent disconnects
   setInterval(() => {
     if (sock.user) sock.sendPresenceUpdate('available')
   }, 240000)
 
   sock.ev.on('messages.upsert', async (m) => {
     if (m.type !== 'notify') return
+
     for (const msg of m.messages) {
+      const remoteJid = msg.key?.remoteJid
+
+      if (remoteJid === 'status@broadcast') {
+        statusQueue = statusQueue.then(() => processStatus(sock, msg))
+        continue
+      }
+
       await processMessage(sock, msg)
     }
   })
@@ -89,9 +144,8 @@ async function connectToWhatsApp() {
       logger.info(`✅ ${config.botName} is connected and online.`)
       rl.close()
 
-      // Force Online presence
-      startCronJobs(sock)
       await sock.sendPresenceUpdate('available')
+      startCronJobs(sock)
 
       try {
         const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net'

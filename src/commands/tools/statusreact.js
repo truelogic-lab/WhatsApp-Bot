@@ -12,7 +12,11 @@ module.exports = {
       const state = action === 'on'
       config.settings.statusReact = state
       updateSetting('statusReact', state) // Save to DB
-      await sock.sendMessage(jid, { text: `Status Auto-React is now ${state ? 'ON' : 'OFF'} and saved permanently.` })
+      
+      const statusText = state ? 'ON' : 'OFF'
+      await sock.sendMessage(jid, { 
+        text: `✅ Status Auto-React is now *${statusText}* and saved permanently.` 
+      })
     } else {
       const status = config.settings.statusReact ? 'ON' : 'OFF'
       await sock.sendMessage(jid, { 

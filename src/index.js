@@ -7,44 +7,52 @@ const logger = require('./utils/logger')
 const config = require('../config')
 
 let sockInstance = null
+let shuttingDown = false
 
 async function start() {
-  logger.info(`Starting ${config.botName} v${config.version}...`)
-  
-  // 1. Load saved settings from database into config
-  syncConfig(config)
-  logger.info(`Loaded settings. Mode: ${config.settings.mode}`)
+  try {
+    logger.info(`Starting ${config.botName} v${config.version}...`)
 
-  // 2. Load all commands
-  loadCommands()
-  
-  // 3. Connect to WhatsApp
-  sockInstance = await connectToWhatsApp()
+    syncConfig(config)
+    logger.info(`Loaded settings. Mode: ${config.settings.mode}`)
+
+    loadCommands()
+
+    sockInstance = await connectToWhatsApp()
+  } catch (error) {
+    logger.error(`Startup failed: ${error.stack || error.message}`)
+    process.exitCode = 1
+  }
 }
 
-const shutdown = async (signal) => {
+async function shutdown(signal) {
+  if (shuttingDown) return
+  shuttingDown = true
+
   logger.warn(`Received ${signal}. Shutting down gracefully...`)
+
   if (sockInstance) {
     try {
-      await sockInstance.end(undefined)
+      await sockInstance.end(new Error('Process shutting down'))
       logger.info('Socket closed successfully.')
-    } catch (e) {
-      logger.error('Error closing socket: ' + e.message)
+    } catch (error) {
+      logger.error(`Error closing socket: ${error.message}`)
     }
   }
+
   process.exit(0)
 }
 
 process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 
-process.on('uncaughtException', (err) => {
-  if (err.message && err.message.includes('Bad MAC')) return
-  logger.error('Uncaught Exception: ' + err.message)
+process.on('uncaughtException', (error) => {
+  logger.error(`Uncaught exception: ${error.stack || error.message}`)
+  process.exit(1)
 })
 
 process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled Rejection: ' + reason)
+  logger.error(`Unhandled rejection: ${reason?.stack || reason}`)
 })
 
 start()

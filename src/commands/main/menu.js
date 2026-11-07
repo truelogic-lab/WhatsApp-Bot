@@ -26,7 +26,7 @@ module.exports = {
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴍᴀɪɴ 〕━━━━━━
-${list(['ping', 'menu', 'settings', 'mode', 'prefix', 'join', 'owner', 'broadcast', 'restart'])}
+${list(['ping', 'menu', 'settings', 'mode', 'prefix', 'repo', 'update', 'join', 'owner', 'broadcast', 'restart'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴛᴏᴏʟs 〕━━━━━━
@@ -42,7 +42,7 @@ ${list(['play', 'tiktok', 'instagram'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ɢʀᴏᴜᴘ 〕━━━━━━
-${list(['tagall', 'kick', 'promote', 'mute', 'unmute', 'link', 'antidelete', 'antilink'])}
+${list(['tagall', 'kick', 'promote', 'mute', 'unmute', 'link', 'poll', 'antidelete', 'antilink'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴇᴍᴏᴊɪ ᴇғғᴇᴄᴛs 〕━━━━━━
