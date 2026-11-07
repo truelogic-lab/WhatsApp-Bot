@@ -1,0 +1,12 @@
+{
+  "settings": {
+    "statusReact": true,
+    "autoStatus": true,
+    "antiLink": true,
+    "antiDelete": true,
+    "autoChannelReact": true,
+    "autoPost": true,
+    "antiCall": true
+  },
+  "prefix": "."
+}

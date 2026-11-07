@@ -1,0 +1,26 @@
+{
+  "name": "warren-xmd",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "@distube/ytdl-core": "^5.2.1",
+    "@hapi/boom": "^10.0.1",
+    "@img/sharp-wasm32": "^0.35.5",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "axios": "^1.21.0",
+    "cheerio": "^1.2.0",
+    "dotenv": "^18.0.9",
+    "mathjs": "^15.2.0",
+    "pino": "^10.4.0",
+    "pino-pretty": "^13.2.0",
+    "sharp": "^0.35.5",
+    "yt-search": "^2.13.1"
+  }
+}
