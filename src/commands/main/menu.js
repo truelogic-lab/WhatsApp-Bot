@@ -3,7 +3,6 @@
 const { getCommandCount } = require('../../handlers/loader')
 const fs = require('fs')
 const path = require('path')
-const logger = require('../../utils/logger')
 
 module.exports = {
   name: 'menu',
@@ -18,7 +17,7 @@ module.exports = {
 
     const menuText = `╭━━━━━━〔 ʙᴏᴛ ɪɴғᴏ 〕━━━━━━
 │ ◉ ɴᴀᴍᴇ: ${config.botName}
-│ ◉ ᴏᴡɴᴇʀ: ${config.ownerName}
+│ ◉ ᴏᴡɴᴇʀ: Warren
 │ ◉ ᴍᴏᴅᴇ: ${config.settings.mode.toUpperCase()}
 │ ◉ ᴄᴏᴍᴍᴀɴᴅs: ${cmdCount}
 │ ◉ ᴜᴘᴛɪᴍᴇ: ${uptime}
@@ -30,7 +29,7 @@ ${list(['ping', 'menu', 'settings', 'mode', 'prefix', 'repo', 'update', 'join', 
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴛᴏᴏʟs 〕━━━━━━
-${list(['sticker', 'toimg', 'take', 'vv', 'react', 'setdp', 'getdp', 'img', 'calc', 'ssweb', 'autostatus', 'autoreact', 'statusreact', 'channelreact', 'autobio', 'autopost', 'autoreply', 'anticall'])}
+${list(['sticker', 'toimg', 'take', 'vv', 'react', 'setdp', 'getdp', 'img', 'calc', 'ssweb', 'story', 'autostatus', 'autoreact', 'statusreact', 'channelreact', 'autobio', 'autopost', 'autoreply', 'anticall'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 sᴇᴀʀᴄʜ & ᴀɪ 〕━━━━━━
@@ -41,17 +40,21 @@ ${list(['ai', 'gpt', 'weather', 'lyrics'])}
 ${list(['play', 'tiktok', 'instagram'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
-╭━━━━━━〔 ɢʀᴏᴜᴘ 〕━━━━━━
-${list(['tagall', 'kick', 'promote', 'mute', 'unmute', 'link', 'poll', 'antidelete', 'antilink'])}
+╭━━━━━━〔 ɢʀᴏᴜᴘ sᴇᴛᴛɪɴɢs 〕━━━━━━
+${list(['mute', 'unmute', 'link', 'revoke', 'ginfo', 'updategname', 'updategdesc', 'gcpp', 'poll', 'chvote', 'gcstatus', 'tagall', 'tag'])}
+╰━━━━━━━━━━━━━━━━━━━━━━━
+
+╭━━━━━━〔 ɢʀᴏᴜᴘ ᴀᴄᴛɪᴏɴs 〕━━━━━━
+${list(['kick', 'promote', 'demote', 'add', 'newgc', 'out', 'end', 'invite', 'accept', 'reject', 'acceptall', 'rejectall', 'requests', 'antidelete', 'antilink'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴇᴍᴏᴊɪ ᴇғғᴇᴄᴛs 〕━━━━━━
 ${list(['happy', 'sad', 'angry', 'shy', 'moon', 'confused', 'hot', 'fancy', 'flag', 'heart', 'laugh', 'cry', 'blush', 'bonk', 'cuddle', 'hug', 'kiss', 'lick', 'pat', 'slap', 'smug', 'wave', 'wink', 'bite', 'poke', 'dance', 'kill', 'tail', 'tickle', 'roll', 'flip', 'pick', 'joke', 'truth', 'dare', 'shrug', 'facepalm', 'yeet', 'triggered', 'scream', 'faint', 'clap', 'pray', 'salute', 'cringe', 'bruh', 'sus', 'sigma', 'nervous', 'bored', 'sleepy', 'hungry', 'thirsty', 'sick', 'cool', 'nerd', 'rich', 'poor', 'strong', 'weak', 'fast', 'slow', 'smart', 'dumb', 'lucky', 'unlucky', 'love', 'hate'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
-> *⚡ ${config.ownerName}-ᴍᴅ ꜱᴘᴇᴇᴅ: ${speed}ᴍꜱ 🔥*`
+> *⚡ Warren-ᴍᴅ ꜱᴘᴇᴇᴅ: ${speed}ᴍꜱ 🔥*`
 
-    // Context Info with Newsletter details
+    const imagePath = path.join(__dirname, '../../../assets/menu.png')
     const contextInfo = {
       forwardingScore: 999,
       isForwarded: true,
@@ -62,23 +65,14 @@ ${list(['happy', 'sad', 'angry', 'shy', 'moon', 'confused', 'hot', 'fancy', 'fla
       }
     }
 
-    const imagePath = path.join(__dirname, '../../../assets/menu.png')
-
     try {
       if (fs.existsSync(imagePath)) {
-        await sock.sendMessage(jid, { 
-          image: fs.readFileSync(imagePath), 
-          caption: menuText,
-          contextInfo: contextInfo
-        })
+        await sock.sendMessage(jid, { image: fs.readFileSync(imagePath), caption: menuText, contextInfo })
       } else {
-        await sock.sendMessage(jid, { 
-          text: menuText,
-          contextInfo: contextInfo
-        })
+        await sock.sendMessage(jid, { text: menuText, contextInfo })
       }
     } catch (error) {
-      logger.error('Failed to send menu: ' + error.message)
+      await sock.sendMessage(jid, { text: menuText, contextInfo })
     }
   }
 }
