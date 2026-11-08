@@ -6,7 +6,8 @@
     "antiDelete": true,
     "autoChannelReact": true,
     "autoPost": true,
-    "antiCall": true
+    "antiCall": true,
+    "alwaysOnline": true
   },
   "prefix": ".",
   "morningConfig": {
