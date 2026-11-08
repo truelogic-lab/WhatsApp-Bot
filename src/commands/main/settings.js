@@ -12,13 +12,15 @@ module.exports = {
 🛠️ *AVAILABLE SETTINGS COMMANDS*
 🔹 ${config.prefix}botname
 🔹 ${config.prefix}description
-🔹 ${config.prefix}botdp
+🔹 ${config.prefix}botdp (Menu Image)
+🔹 ${config.prefix}setdp (Profile Picture)
 🔹 ${config.prefix}mode
 
 👑 *MAKE IT YOUR OWN!*
 💚 Change the bot name
 📝 Update the bot description
-🖼️ Set a new bot profile picture
+🖼️ Set a new menu image (botdp)
+📸 Set a new WhatsApp DP (setdp)
 🔒 Change the bot mode
 
 🚀 You can customize your bot

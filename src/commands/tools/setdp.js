@@ -12,16 +12,17 @@ module.exports = {
       return sock.sendMessage(jid, { text: 'Reply to an image to set it as the bot profile picture.' })
     }
 
-    await sock.sendMessage(jid, { text: 'Updating profile picture...' })
+    await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
 
     try {
       const targetMsg = msg.message.imageMessage ? msg : { key: msg.key, message: msg.message.extendedTextMessage.contextInfo.quotedMessage }
       const buffer = await downloadMediaMessage(targetMsg, 'buffer', {}, { logger: console })
       
-      // Update the profile picture
       await sock.updateProfilePicture(sock.user.id, buffer)
-      await sock.sendMessage(jid, { text: 'Profile picture updated successfully.' })
+      await sock.sendMessage(jid, { text: '✅ Bot profile picture updated successfully.' })
+      await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } }).catch(() => {})
     } catch (error) {
+      await sock.sendMessage(jid, { react: { text: '❌', key: msg.key } }).catch(() => {})
       throw new Error('Failed to update profile picture.')
     }
   }
