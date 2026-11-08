@@ -17,18 +17,15 @@ const SAVE_KEYWORDS = ['send', 'sendme', 'do', 'give']
 
 async function processMessage(sock, msg) {
   try {
-    // --- ANTI-STATUS MENTION (Intercept before status ignore) ---
+    // --- ANTI-STATUS MENTION ---
     if (msg.key.remoteJid === 'status@broadcast') {
       if (config.settings.antiStatusMention && !msg.key.fromMe) {
-        const botNumber = getOwnerNumber() // Using owner number as bot number here
+        const botNumber = getOwnerNumber()
         
-        // Check if the status mentions the bot
         if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.includes(`${botNumber}@s.whatsapp.net`)) {
           const offender = msg.key.participant || msg.key.remoteJid
-          
           logger.info(`⚠️ Anti-Status Mention triggered by ${offender}`)
           
-          // Find groups they are in and kick them
           const groups = await sock.groupFetchAllParticipating()
           for (const groupJid of Object.keys(groups)) {
             const isMember = groups[groupJid].participants.find(p => p.id === offender)
@@ -41,7 +38,7 @@ async function processMessage(sock, msg) {
           }
         }
       }
-      return // Ignore all other status processing here
+      return
     }
 
     if (!msg.message) return
@@ -49,12 +46,12 @@ async function processMessage(sock, msg) {
     const sender = msg.key.participant || msg.key.remoteJid
     const isOwner = sender.includes(getOwnerNumber()) || msg.key.fromMe
 
-    // ACTIVITY TRACKING
+    // --- ACTIVITY TRACKING ---
     if (msg.key.remoteJid.endsWith('@g.us') && !msg.key.fromMe) {
       trackActivity(msg.key.remoteJid, sender)
     }
 
-    // EXTRACT TEXT
+    // --- EXTRACT TEXT ---
     let text = ''
     const msgType = Object.keys(msg.message)[0]
     
@@ -117,12 +114,36 @@ async function processMessage(sock, msg) {
       }
     }
 
-    // --- CHANNEL POST ---
+    // --- AUTOMATIC CHANNEL REACTIONS (HARDCODED) ---
     if (msg.key.remoteJid.endsWith('@newsletter')) {
-      if (config.settings.autoChannelReact && !msg.key.fromMe) {
-        const channelEmojis = ['🔥', '❤️', '👏', '💯', '🤩', '😍', '💪', '🎉', '✨', '👀', '🚀', '✅']
+      // No toggle check anymore, it always reacts!
+      if (
+        msg.message &&
+        msg.key.id &&
+        !msg.message.reactionMessage &&
+        !msg.message.protocolMessage
+      ) {
+        const channelEmojis = [
+          '🔥', '❤️', '👏', '💯', '🤩', '😍', '💪', '🎉', 
+          '✨', '👀', '🚀', '✅', '🥰', '⚡', '🙌', '👑', 
+          '🌟', '💥', '🎯', '🏆', '😎', '🫡'
+        ]
         const randomEmoji = channelEmojis[Math.floor(Math.random() * channelEmojis.length)]
-        await sock.sendMessage(msg.key.remoteJid, { react: { text: randomEmoji, key: msg.key } }).catch(() => {})
+
+        const serverId = msg.key.server_id || msg.key.serverId
+
+        if (!serverId) {
+          return // Skip silently if no serverId
+        }
+
+        setTimeout(async () => {
+          try {
+            await sock.newsletterReactMessage(msg.key.remoteJid, serverId, randomEmoji)
+            logger.info(`Channel reaction sent: ${randomEmoji} | server_id: ${serverId}`)
+          } catch (err) {
+            logger.error(`Channel auto-reaction failed: ${err.message}`)
+          }
+        }, 3000)
       }
       return
     }

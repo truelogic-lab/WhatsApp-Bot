@@ -5,13 +5,13 @@ require('dotenv').config()
 const config = {
   botName: 'Warren-XMD',
   version: '1.0.0',
-  
+
   // Owner details are now securely hardcoded inside commands
-  
+
   prefix: '.',
   timezone: 'Africa/Nairobi',
   sessionDir: './data/session',
-  
+
   settings: {
     mode: 'public',
     autoStatus: false,
@@ -22,7 +22,8 @@ const config = {
     antiDelete: false,
     antiLink: 'kick',
     antiStatusMention: false,
-    antiCall: false
+    antiCall: false,
+    autoChannelReact: true
   }
 }
 

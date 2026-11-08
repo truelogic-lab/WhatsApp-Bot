@@ -30,7 +30,7 @@ ${list(['ping', 'menu', 'mode', 'repo', 'botname', 'description', 'botdp', 'join
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴛᴏᴏʟs 〕━━━━━━
-${list(['vv', 'img', 'calc', 'take', 'story', 'react', 'toimg', 'ssweb', 'setdp', 'getdp', 'sticker', 'morning', 'birthday', 'autoview', 'tts', 'autobio', 'autopost', 'anticall', 'autoreact', 'autostatus', 'autoreply', 'statusreact', 'channelreact'])}
+${list(['vv', 'img', 'calc', 'take', 'story', 'react', 'toimg', 'ssweb', 'setdp', 'getdp', 'sticker', 'morning', 'birthday', 'autoview', 'tts', 'autobio', 'autopost', 'anticall', 'autoreact', 'autostatus', 'autoreply', 'statusreact'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 sᴇᴀʀᴄʜ & ᴀɪ 〕━━━━━━
