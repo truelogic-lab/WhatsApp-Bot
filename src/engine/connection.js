@@ -8,6 +8,7 @@ const { processMessage } = require('./router')
 const { handleMessageUpdate } = require('./antidelete')
 const menuCommand = require('../commands/main/menu')
 const { startCronJobs } = require('../utils/cron')
+const { loadDB } = require('../utils/database')
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
 const question = (text) => new Promise((resolve) => rl.question(text, resolve))
@@ -18,7 +19,7 @@ const CHANNELS = [
 ]
 
 const reactedStatuses = new Set()
-const userCooldowns = new Map() // Tracks the last time we reacted to a user
+const userCooldowns = new Map() 
 
 let statusQueue = Promise.resolve()
 
@@ -31,18 +32,18 @@ async function processStatus(sock, msg) {
     const statusId = `${participant}:${key.id}`
     if (reactedStatuses.has(statusId)) return
 
-    // COOLDOWN CHECK: Only react once every 10 seconds per user
+    const db = loadDB()
+    const isVip = db.vipStatusContacts && db.vipStatusContacts.includes(participant.split('@')[0])
+
     const now = Date.now()
     const lastReaction = userCooldowns.get(participant) || 0
-    if (now - lastReaction < 10000) return // Skip if reacted recently
+    if (!isVip && (now - lastReaction < 10000)) return // Skip if reacted recently (unless VIP)
 
-    // 1. Auto View
-    if (config.settings.autoStatus) {
+    if (config.settings.autoStatus || isVip) {
       await sock.readMessages([key]).catch(() => {})
     }
 
-    // 2. Auto React
-    if (config.settings.statusReact) {
+    if (config.settings.statusReact || isVip) {
       const statusEmojis = ['❤️', '🔥', '👏', '💯', '🤩', '😍', '💪', '🎉', '✨', '👀', '🚀', '✅', '👌', '🙌', '💖', '🌟']
       const randomEmoji = statusEmojis[Math.floor(Math.random() * statusEmojis.length)]
 
@@ -53,12 +54,9 @@ async function processStatus(sock, msg) {
       }).catch(() => {})
 
       reactedStatuses.add(statusId)
-      userCooldowns.set(participant, now) // Update cooldown
+      userCooldowns.set(participant, now)
       
-      logger.info(`❤️ Auto-reacted to status from ${participant} with ${randomEmoji}`)
-      
-      if (reactedStatuses.size > 5000) reactedStatuses.clear()
-      if (userCooldowns.size > 1000) userCooldowns.clear()
+      logger.info(`❤️ Reacted to status from ${participant} with ${randomEmoji} ${isVip ? '(VIP)' : ''}`)
     }
   } catch (error) {
     logger.error(`Status processing failed: ${error.message}`)
@@ -101,9 +99,7 @@ async function connectToWhatsApp() {
     }
   })
 
-  sock.ev.on('messages.update', async (updates) => {
-    await handleMessageUpdate(sock, updates)
-  })
+  sock.ev.on('messages.update', async (updates) => { await handleMessageUpdate(sock, updates) })
 
   sock.ev.on('call', async (calls) => {
     if (!config.settings.antiCall) return
@@ -112,9 +108,7 @@ async function connectToWhatsApp() {
         try {
           await sock.rejectCall(call.id, call.from)
           await sock.sendMessage(call.from, { text: '📵 *Anti-Call System*\n\nThis bot does not accept voice or video calls. Please send a text message instead.' })
-        } catch (error) {
-          logger.error(`Failed to reject call: ${error.message}`)
-        }
+        } catch (error) {}
       }
     }
   })
@@ -128,22 +122,16 @@ async function connectToWhatsApp() {
       try {
         const code = await sock.requestPairingCode(cleanNumber)
         logger.info(`Pairing Code: ${code}`)
-      } catch (error) {
-        logger.error('Failed to request pairing code: ' + error.message)
-      }
+      } catch (error) {}
     }
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode
-      if (statusCode !== DisconnectReason.loggedOut) {
-        connectToWhatsApp()
-      } else {
-        process.exit(1)
-      }
+      if (statusCode !== DisconnectReason.loggedOut) connectToWhatsApp()
+      else process.exit(1)
     } else if (connection === 'open') {
       logger.info(`✅ ${config.botName} is connected and online.`)
       rl.close()
-
       await sock.sendPresenceUpdate('available')
       startCronJobs(sock)
 
@@ -163,9 +151,7 @@ async function connectToWhatsApp() {
 
         await sock.sendMessage(botJid, { text: welcomeText })
         await menuCommand.execute({ sock, jid: botJid, config, startTime: Date.now() })
-      } catch (error) {
-        logger.error(`Failed to send welcome message/menu: ${error.message}`)
-      }
+      } catch (error) {}
 
       setTimeout(async () => {
         for (const inviteCode of CHANNELS) {

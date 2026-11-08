@@ -35,12 +35,10 @@ function saveDB(data) {
 function syncConfig(config) {
   const db = loadDB()
   
-  // Sync Settings (Mode, AutoStatus, etc.)
   if (db.settings) {
     config.settings = { ...config.settings, ...db.settings }
   }
   
-  // Sync Root Prefix
   if (db.prefix) {
     config.prefix = db.prefix
   }
@@ -51,15 +49,13 @@ function syncConfig(config) {
 function updateSetting(key, value) {
   const db = loadDB()
   
-  // If it's a root-level setting like prefix, save at root
   if (key === 'prefix') {
     db.prefix = value
   } else {
-    // Otherwise, save inside the settings object
     db.settings[key] = value
   }
   
   saveDB(db)
 }
 
-module.exports = { syncConfig, updateSetting }
+module.exports = { loadDB, saveDB, syncConfig, updateSetting }

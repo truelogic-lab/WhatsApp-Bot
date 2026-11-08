@@ -8,5 +8,10 @@
     "autoPost": true,
     "antiCall": true
   },
-  "prefix": "."
+  "prefix": ".",
+  "morningConfig": {
+    "number": "254136726609",
+    "time": "03:14",
+    "message": "Good morning ❤️🥹 As you open your eyes to a new day, I just want you to know how special you are. I hope today brings you the peace your heart deserves, the happiness that makes you smile genuinely, and countless little reasons to feel loved. Even if I cannot be beside you every morning, I hope my words remind you that someone out here genuinely cares about you and wishes nothing but the best for you. May your worries become lighter, your dreams come closer, and your heart never run out of hope. Never forget that you are precious, appreciated, and deserving of beautiful things. Take care of yourself, smile a little more, and face today knowing that you matter more than you could ever imagine. Have a beautiful morning and an amazing day ahead. ❤️🌹"
+  }
 }

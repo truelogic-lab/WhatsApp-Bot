@@ -23,33 +23,42 @@ async function handleCommand(context) {
   }
 
   try {
-    // 1. React with Hourglass (⏳) to show processing
+    // React with Hourglass (⏳)
     await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
 
     if (config.settings.autoTyping) {
       await sock.sendPresenceUpdate('composing', jid)
     }
 
-    // 2. Execute the command
-    await command.execute({
-      sock,
-      msg,
-      args,
-      config,
-      startTime,
-      jid,
-      commandName
-    })
+    // Add a 15-second timeout to prevent infinite hanging on broken APIs
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Command timed out after 15 seconds.')), 15000)
+    )
 
-    // 3. React with Checkmark (✅) on success
+    // Race the command against the timeout
+    await Promise.race([
+      command.execute({ sock, msg, args, config, startTime, jid, commandName }),
+      timeoutPromise
+    ])
+
+    // React with Checkmark (✅)
     await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } }).catch(() => {})
 
   } catch (error) {
     logger.error(`Error executing command [${commandName}]: ${error.message}`)
     
-    // 4. React with Cross (❌) on failure
+    // React with Cross (❌)
     await sock.sendMessage(jid, { react: { text: '❌', key: msg.key } }).catch(() => {})
-    await sock.sendMessage(jid, { text: 'Unable to complete the request. Please try again later.' })
+    
+    // Send a clean, professional error message
+    let userFriendlyError = 'Unable to complete the request right now. Please try again later.'
+    if (error.message.includes('timed out')) {
+      userFriendlyError = 'The server took too long to respond. The service might be down or busy.'
+    } else if (error.message.includes('rate limit')) {
+      userFriendlyError = 'The service is currently rate-limited. Please try again in a few minutes.'
+    }
+
+    await sock.sendMessage(jid, { text: `❌ ${userFriendlyError}` })
     
   } finally {
     if (config.settings.autoTyping) {

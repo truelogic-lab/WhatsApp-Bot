@@ -3,6 +3,7 @@
 const { getCommandCount } = require('../../handlers/loader')
 const fs = require('fs')
 const path = require('path')
+const { getOwnerName, getFooter } = require('../../utils/branding')
 
 module.exports = {
   name: 'menu',
@@ -17,7 +18,7 @@ module.exports = {
 
     const menuText = `╭━━━━━━〔 ʙᴏᴛ ɪɴғᴏ 〕━━━━━━
 │ ◉ ɴᴀᴍᴇ: ${config.botName}
-│ ◉ ᴏᴡɴᴇʀ: Warren
+│ ◉ ᴏᴡɴᴇʀ: ${getOwnerName()}
 │ ◉ ᴍᴏᴅᴇ: ${config.settings.mode.toUpperCase()}
 │ ◉ ᴄᴏᴍᴍᴀɴᴅs: ${cmdCount}
 │ ◉ ᴜᴘᴛɪᴍᴇ: ${uptime}
@@ -25,15 +26,15 @@ module.exports = {
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴍᴀɪɴ 〕━━━━━━
-${list(['ping', 'menu', 'settings', 'mode', 'prefix', 'repo', 'update', 'join', 'owner', 'broadcast', 'restart'])}
+${list(['ping', 'menu', 'mode', 'repo', 'join', 'owner', 'prefix', 'update', 'restart', 'settings', 'broadcast'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴛᴏᴏʟs 〕━━━━━━
-${list(['sticker', 'toimg', 'take', 'vv', 'react', 'setdp', 'getdp', 'img', 'calc', 'ssweb', 'story', 'autostatus', 'autoreact', 'statusreact', 'channelreact', 'autobio', 'autopost', 'autoreply', 'anticall'])}
+${list(['vv', 'img', 'calc', 'take', 'story', 'react', 'toimg', 'ssweb', 'setdp', 'getdp', 'sticker', 'morning', 'birthday', 'autoview', 'tts', 'autobio', 'autopost', 'anticall', 'autoreact', 'autostatus', 'autoreply', 'statusreact', 'channelreact'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 sᴇᴀʀᴄʜ & ᴀɪ 〕━━━━━━
-${list(['ai', 'gpt', 'weather', 'lyrics', 'githubstalk', 'igstalk', 'tiktokstalk'])}
+${list(['ai', 'gpt', '8ball', 'imagine', 'dare', 'rate', 'truth', 'lyrics', 'weather', 'igstalk', 'githubstalk', 'compatibility', 'tiktokstalk'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴅᴏᴡɴʟᴏᴀᴅ 〕━━━━━━
@@ -41,18 +42,18 @@ ${list(['play', 'tiktok', 'instagram'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ɢʀᴏᴜᴘ sᴇᴛᴛɪɴɢs 〕━━━━━━
-${list(['mute', 'unmute', 'link', 'revoke', 'ginfo', 'updategname', 'updategdesc', 'gcpp', 'poll', 'chvote', 'gcstatus', 'tagall', 'tag'])}
+${list(['tag', 'link', 'gcpp', 'mute', 'poll', 'ginfo', 'revoke', 'unmute', 'tagall', 'chvote', 'gcstatus', 'updategname', 'updategdesc'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ɢʀᴏᴜᴘ ᴀᴄᴛɪᴏɴs 〕━━━━━━
-${list(['kick', 'promote', 'demote', 'add', 'newgc', 'out', 'end', 'invite', 'accept', 'reject', 'acceptall', 'rejectall', 'requests', 'antidelete', 'antilink'])}
+${list(['add', 'end', 'out', 'kick', 'accept', 'reject', 'invite', 'newgc', 'demote', 'promote', 'requests', 'acceptall', 'rejectall', 'antilink', 'antidelete'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴇᴍᴏᴊɪ ᴇғғᴇᴄᴛs 〕━━━━━━
-${list(['happy', 'sad', 'angry', 'shy', 'moon', 'confused', 'hot', 'fancy', 'flag', 'heart', 'laugh', 'cry', 'blush', 'bonk', 'cuddle', 'hug', 'kiss', 'lick', 'pat', 'slap', 'smug', 'wave', 'wink', 'bite', 'poke', 'dance', 'kill', 'tail', 'tickle', 'roll', 'flip', 'pick', 'joke', 'truth', 'dare', 'shrug', 'facepalm', 'yeet', 'triggered', 'scream', 'faint', 'clap', 'pray', 'salute', 'cringe', 'bruh', 'sus', 'sigma', 'nervous', 'bored', 'sleepy', 'hungry', 'thirsty', 'sick', 'cool', 'nerd', 'rich', 'poor', 'strong', 'weak', 'fast', 'slow', 'smart', 'dumb', 'lucky', 'unlucky', 'love', 'hate'])}
+${list(['cry', 'hot', 'hug', 'joy', 'moon', 'pat', 'sad', 'shy', 'sus', 'wave', 'wink', 'bite', 'cool', 'dare', 'flip', 'hate', 'joke', 'kiss', 'lick', 'love', 'nerd', 'pick', 'poke', 'poor', 'rich', 'roll', 'slap', 'slow', 'smug', 'tail', 'yeet', 'blush', 'bonk', 'bruh', 'clap', 'faint', 'fancy', 'flag', 'fast', 'kill', 'laugh', 'lucky', 'pray', 'sick', 'slam', 'weak', 'angry', 'bored', 'crush', 'cuddle', 'dance', 'dumb', 'happy', 'heart', 'hungry', 'nerdy', 'proud', 'smart', 'tired', 'brain', 'brave', 'calm', 'clumsy', 'confused', 'cringe', 'dream', 'grumpy', 'honest', 'humble', 'jealous', 'kind', 'lazy', 'lonely', 'mystic', 'nervous', 'polite', 'quiet', 'sassy', 'silly', 'sleepy', 'strong', 'stupid', 'sweat', 'thankful', 'thirsty', 'tickle', 'unlucky', 'weird', 'win', 'worry'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
-> *⚡ Warren-ᴍᴅ ꜱᴘᴇᴇᴅ: ${speed}ᴍꜱ 🔥*`
+> *⚡ ${getOwnerName()}-ᴍᴅ | ${getFooter()} | ꜱᴘᴇᴇᴅ: ${speed}ᴍꜱ 🔥*`
 
     const imagePath = path.join(__dirname, '../../../assets/menu.png')
     const contextInfo = {
