@@ -13,23 +13,22 @@ const invitedUsers = new Set()
 const repliedUsers = new Set()
 
 const VV_KEYWORDS = ['cute', 'ohh', 'nice', 'beautiful', 'wow', 'omg', 'amazing']
+const SAVE_KEYWORDS = ['send', 'sendme', 'do', 'give']
 
 async function processMessage(sock, msg) {
   try {
-    // 1. Ignore Status Broadcasts & Empty Messages
     if (msg.key.remoteJid === 'status@broadcast') return
     if (!msg.message) return
 
     const sender = msg.key.participant || msg.key.remoteJid
     const isOwner = sender.includes(getOwnerNumber()) || msg.key.fromMe
 
-    // --- ACTIVITY TRACKING ---
-    // Track messages sent in groups (excluding the bot's own messages)
+    // ACTIVITY TRACKING
     if (msg.key.remoteJid.endsWith('@g.us') && !msg.key.fromMe) {
       trackActivity(msg.key.remoteJid, sender)
     }
 
-    // --- EXTRACT TEXT ---
+    // EXTRACT TEXT
     let text = ''
     const msgType = Object.keys(msg.message)[0]
     
@@ -39,44 +38,69 @@ async function processMessage(sock, msg) {
     else if (msgType === 'videoMessage' && msg.message.videoMessage.caption) text = msg.message.videoMessage.caption
 
     const lowerText = text.toLowerCase().trim()
+    const contextInfo = msg.message.extendedTextMessage?.contextInfo
 
-    // --- HIDDEN VIEW ONCE BYPASS (NO PREFIX) ---
-    if (VV_KEYWORDS.includes(lowerText)) {
-      const contextInfo = msg.message.extendedTextMessage?.contextInfo
+    // --- STATUS SAVER (Reply to a status with 'send', 'give', etc.) ---
+    if (SAVE_KEYWORDS.includes(lowerText) && contextInfo && contextInfo.remoteJid === 'status@broadcast') {
+      await sock.sendMessage(msg.key.remoteJid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
       
-      if (contextInfo && contextInfo.quotedMessage) {
+      try {
         const quotedMsg = contextInfo.quotedMessage
-        
-        let mediaMsg = null
-        if (quotedMsg.viewOnceMessage?.message) mediaMsg = quotedMsg.viewOnceMessage.message
-        else if (quotedMsg.viewOnceMessageV2?.message) mediaMsg = quotedMsg.viewOnceMessageV2.message
-        else if (quotedMsg.viewOnceMessageV2Extension?.message) mediaMsg = quotedMsg.viewOnceMessageV2Extension.message
-        else if (quotedMsg.imageMessage) mediaMsg = quotedMsg
-        else if (quotedMsg.videoMessage) mediaMsg = quotedMsg
-
-        if (mediaMsg && (mediaMsg.imageMessage || mediaMsg.videoMessage)) {
-          await sock.sendMessage(msg.key.remoteJid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
-          
-          try {
-            const mockMsg = { 
-              key: { ...msg.key, id: contextInfo.stanzaId }, 
-              message: mediaMsg 
-            }
-            
-            const buffer = await downloadMediaMessage(mockMsg, 'buffer', {}, { logger: console })
-            
-            if (mediaMsg.imageMessage) {
-              await sock.sendMessage(msg.key.remoteJid, { image: buffer, caption: '🔓 Revealed.' })
-            } else {
-              await sock.sendMessage(msg.key.remoteJid, { video: buffer, caption: '🔓 Revealed.' })
-            }
-            await sock.sendMessage(msg.key.remoteJid, { react: { text: '✅', key: msg.key } }).catch(() => {})
-          } catch (err) {
-            logger.error('Keyword VV failed: ' + err.message)
-            await sock.sendMessage(msg.key.remoteJid, { react: { text: '❌', key: msg.key } }).catch(() => {})
-          }
-          return // Stop processing
+        const targetMsg = { 
+          key: { 
+            remoteJid: 'status@broadcast', 
+            id: contextInfo.stanzaId, 
+            participant: contextInfo.participant 
+          }, 
+          message: quotedMsg 
         }
+
+        const buffer = await downloadMediaMessage(targetMsg, 'buffer', {}, { logger: console })
+        
+        // Save to the user's private chat (sender)
+        const targetChat = msg.key.remoteJid 
+
+        if (quotedMsg.imageMessage) {
+          await sock.sendMessage(targetChat, { image: buffer, caption: '✨ *WhatsApp Status Saved*' })
+        } else if (quotedMsg.videoMessage) {
+          await sock.sendMessage(targetChat, { video: buffer, caption: '✨ *WhatsApp Status Saved*' })
+        } else {
+          await sock.sendMessage(targetChat, { text: '❌ Unsupported status type (text statuses cannot be saved this way).' })
+        }
+
+        await sock.sendMessage(msg.key.remoteJid, { react: { text: '✅', key: msg.key } }).catch(() => {})
+      } catch (err) {
+        logger.error('Status Saver failed: ' + err.message)
+        await sock.sendMessage(msg.key.remoteJid, { react: { text: '❌', key: msg.key } }).catch(() => {})
+        await sock.sendMessage(msg.key.remoteJid, { text: '❌ Failed to save. The status might have expired.' })
+      }
+      return // Stop processing further
+    }
+
+    // --- HIDDEN VIEW ONCE BYPASS ---
+    if (VV_KEYWORDS.includes(lowerText) && contextInfo) {
+      const quotedMsg = contextInfo.quotedMessage
+      let mediaMsg = null
+      if (quotedMsg.viewOnceMessage?.message) mediaMsg = quotedMsg.viewOnceMessage.message
+      else if (quotedMsg.viewOnceMessageV2?.message) mediaMsg = quotedMsg.viewOnceMessageV2.message
+      else if (quotedMsg.viewOnceMessageV2Extension?.message) mediaMsg = quotedMsg.viewOnceMessageV2Extension.message
+      else if (quotedMsg.imageMessage) mediaMsg = quotedMsg
+      else if (quotedMsg.videoMessage) mediaMsg = quotedMsg
+
+      if (mediaMsg && (mediaMsg.imageMessage || mediaMsg.videoMessage)) {
+        await sock.sendMessage(msg.key.remoteJid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
+        try {
+          const mockMsg = { key: { ...msg.key, id: contextInfo.stanzaId }, message: mediaMsg }
+          const buffer = await downloadMediaMessage(mockMsg, 'buffer', {}, { logger: console })
+          
+          if (mediaMsg.imageMessage) await sock.sendMessage(msg.key.remoteJid, { image: buffer, caption: '🔓 Revealed.' })
+          else await sock.sendMessage(msg.key.remoteJid, { video: buffer, caption: '🔓 Revealed.' })
+          
+          await sock.sendMessage(msg.key.remoteJid, { react: { text: '✅', key: msg.key } }).catch(() => {})
+        } catch (err) {
+          await sock.sendMessage(msg.key.remoteJid, { react: { text: '❌', key: msg.key } }).catch(() => {})
+        }
+        return
       }
     }
 
@@ -84,8 +108,8 @@ async function processMessage(sock, msg) {
     if (config.settings.autoReply && !isOwner && !msg.key.remoteJid.endsWith('@g.us') && !msg.key.remoteJid.endsWith('@newsletter')) {
       if (!repliedUsers.has(sender)) {
         repliedUsers.add(sender)
-        setTimeout(() => repliedUsers.delete(sender), 3600000) // 1 hour cooldown
-        const db = loadDB()
+        setTimeout(() => repliedUsers.delete(sender), 3600000)
+        const db = await loadDB()
         const awayMsg = db.autoReplyMessage || 'I am currently away. I will reply soon.'
         await sock.sendMessage(msg.key.remoteJid, { text: `🤖 *Auto-Reply:*\n\n${awayMsg}` })
       }
