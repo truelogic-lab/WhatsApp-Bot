@@ -37,7 +37,7 @@ async function processStatus(sock, msg) {
 
     const now = Date.now()
     const lastReaction = userCooldowns.get(participant) || 0
-    if (!isVip && (now - lastReaction < 10000)) return // Skip if reacted recently (unless VIP)
+    if (!isVip && (now - lastReaction < 10000)) return
 
     if (config.settings.autoStatus || isVip) {
       await sock.readMessages([key]).catch(() => {})
@@ -74,14 +74,17 @@ async function connectToWhatsApp() {
     printQRInTerminal: false,
     browser: Browsers.ubuntu('Chrome'),
     syncFullHistory: false,
-    markOnlineOnConnect: true,
+    markOnlineOnConnect: config.settings.alwaysOnline, // Only mark online on connect if enabled
     generateHighQualityLinkPreview: true
   })
 
   sock.ev.on('creds.update', saveCreds)
 
+  // Keep Alive Ping (Only if alwaysOnline is ON)
   setInterval(() => {
-    if (sock.user) sock.sendPresenceUpdate('available')
+    if (sock.user && config.settings.alwaysOnline) {
+      sock.sendPresenceUpdate('available')
+    }
   }, 240000)
 
   sock.ev.on('messages.upsert', async (m) => {
@@ -132,7 +135,12 @@ async function connectToWhatsApp() {
     } else if (connection === 'open') {
       logger.info(`✅ ${config.botName} is connected and online.`)
       rl.close()
-      await sock.sendPresenceUpdate('available')
+      
+      // Only send available presence if enabled
+      if (config.settings.alwaysOnline) {
+        await sock.sendPresenceUpdate('available')
+      }
+
       startCronJobs(sock)
 
       try {

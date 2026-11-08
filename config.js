@@ -17,6 +17,7 @@ const config = {
     autoStatus: false,
     autoReact: false,
     autoTyping: true,
+    alwaysOnline: true,
     statusReact: false,
     antiDelete: false,
     antiLink: false,
