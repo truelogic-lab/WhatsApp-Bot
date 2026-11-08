@@ -2,7 +2,7 @@
 
 const { connectToWhatsApp } = require('./engine/connection')
 const { loadCommands } = require('./handlers/loader')
-const { syncConfig } = require('./utils/database')
+const { connectDB, syncConfig } = require('./utils/database')
 const logger = require('./utils/logger')
 const config = require('../config')
 
@@ -13,11 +13,12 @@ async function start() {
   try {
     logger.info(`Starting ${config.botName} v${config.version}...`)
 
-    syncConfig(config)
+    // Connect to MongoDB (if configured)
+    await connectDB()
+    await syncConfig(config)
     logger.info(`Loaded settings. Mode: ${config.settings.mode}`)
 
     loadCommands()
-
     sockInstance = await connectToWhatsApp()
   } catch (error) {
     logger.error(`Startup failed: ${error.stack || error.message}`)
@@ -28,18 +29,13 @@ async function start() {
 async function shutdown(signal) {
   if (shuttingDown) return
   shuttingDown = true
-
   logger.warn(`Received ${signal}. Shutting down gracefully...`)
-
   if (sockInstance) {
     try {
       await sockInstance.end(new Error('Process shutting down'))
       logger.info('Socket closed successfully.')
-    } catch (error) {
-      logger.error(`Error closing socket: ${error.message}`)
-    }
+    } catch (error) {}
   }
-
   process.exit(0)
 }
 
