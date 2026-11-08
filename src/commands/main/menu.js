@@ -26,7 +26,7 @@ module.exports = {
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴍᴀɪɴ 〕━━━━━━
-${list(['ping', 'menu', 'mode', 'repo', 'join', 'owner', 'prefix', 'update', 'restart', 'settings', 'broadcast'])}
+${list(['ping', 'menu', 'mode', 'repo', 'botname', 'description', 'botdp', 'join', 'owner', 'prefix', 'update', 'restart', 'settings', 'broadcast'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴛᴏᴏʟs 〕━━━━━━

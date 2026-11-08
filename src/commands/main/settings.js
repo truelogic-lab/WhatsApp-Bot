@@ -2,23 +2,30 @@
 
 module.exports = {
   name: 'settings',
-  permission: 'public',
+  permission: 'owner',
   execute: async ({ sock, jid, config, startTime }) => {
     const speed = Date.now() - startTime
-    
-    const settingsText = `╭━━━━━━〔 sᴇᴛᴛɪɴɢs & sᴛᴀᴛᴜs 〕━━━━━━
-│ ◉ ᴍᴏᴅᴇ: ${config.settings.mode.toUpperCase()}
-│ ◉ ᴘʀᴇғɪx: ${config.prefix}
-│ ◉ ᴠᴇʀsɪᴏɴ: ${config.version}
-╰━━━━━━━━━━━━━━━━━━━━━━━
 
-╭━━━━━━〔 ᴀᴜᴛᴏᴍᴀᴛɪᴏɴ 〕━━━━━━
-│ ◉ ᴀᴜᴛᴏ-sᴛᴀᴛᴜs: ${config.settings.autoStatus ? 'ON' : 'OFF'}
-│ ◉ ᴀᴜᴛᴏ-ᴛʏᴘɪɴɢ: ${config.settings.autoTyping ? 'ON' : 'OFF'}
-│ ◉ ᴀᴜᴛᴏ-ʀᴇᴀᴄᴛ: ${config.settings.autoReact ? 'ON' : 'OFF'}
-╰━━━━━━━━━━━━━━━━━━━━━━━
+    const settingsText = `✨ *Change your bot's settings*
+🎨 Give your bot a new identity!
 
-> *⚡ ${config.ownerName}-ᴍᴅ ꜱᴘᴇᴇᴅ: ${speed}ᴍꜱ 🔥*`
+🛠️ *AVAILABLE SETTINGS COMMANDS*
+🔹 ${config.prefix}botname
+🔹 ${config.prefix}description
+🔹 ${config.prefix}botdp
+🔹 ${config.prefix}mode
+
+👑 *MAKE IT YOUR OWN!*
+💚 Change the bot name
+📝 Update the bot description
+🖼️ Set a new bot profile picture
+🔒 Change the bot mode
+
+🚀 You can customize your bot
+✨ Replace the name
+💫 Add your own preferred name!
+
+> *⚡ Warren-ᴍᴅ ꜱᴘᴇᴇᴅ: ${speed}ᴍꜱ 🔥*`
 
     await sock.sendMessage(jid, { text: settingsText })
   }
