@@ -7,7 +7,7 @@ async function checkAntiLink(sock, msg) {
   if (!config.settings.antiLink) return false
   
   const jid = msg.key.remoteJid
-  if (!jid.endsWith('@g.us')) return false // Only for groups
+  if (!jid.endsWith('@g.us')) return false
   
   const text = msg.message.conversation || msg.message.extendedTextMessage?.text || ''
   
@@ -17,7 +17,6 @@ async function checkAntiLink(sock, msg) {
   if (linkRegex.test(text)) {
     const sender = msg.key.participant || msg.key.remoteJid
     
-    // Check if sender is an admin (to ignore admin links)
     try {
       const groupMetadata = await sock.groupMetadata(jid)
       const participant = groupMetadata.participants.find(p => p.id === sender)
@@ -28,13 +27,24 @@ async function checkAntiLink(sock, msg) {
       // 1. Delete the message
       await sock.sendMessage(jid, { delete: msg.key })
       
-      // 2. Warn the user
-      await sock.sendMessage(jid, { 
-        text: `🚫 *Anti-Link*: @${sender.split('@')[0]}, group links are not allowed here.`,
-        mentions: [sender]
-      })
-      logger.info(`Anti-Link triggered in ${jid} by ${sender}`)
-      return true // Message was intercepted and deleted
+      // 2. Execute action based on mode
+      if (config.settings.antiLink === 'kick') {
+        // Kick the user
+        await sock.groupParticipantsUpdate(jid, [sender], 'remove')
+        await sock.sendMessage(jid, { 
+          text: `🚫 *Anti-Link System*\n\n@${sender.split('@')[0]} has been kicked for sending a group link.`,
+          mentions: [sender]
+        })
+      } else {
+        // Just warn
+        await sock.sendMessage(jid, { 
+          text: `⚠️ *Anti-Link Warning*\n\n@${sender.split('@')[0]}, group links are not allowed here. Next time you will be kicked!`,
+          mentions: [sender]
+        })
+      }
+      
+      logger.info(`Anti-Link triggered in ${jid} by ${sender} (${config.settings.antiLink} mode)`)
+      return true
       
     } catch (error) {
       logger.error(`Anti-Link failed: ${error.message}`)

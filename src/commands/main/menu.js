@@ -46,7 +46,7 @@ ${list(['tag', 'link', 'gcpp', 'mute', 'poll', 'ginfo', 'revoke', 'unmute', 'tag
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ɢʀᴏᴜᴘ ᴀᴄᴛɪᴏɴs 〕━━━━━━
-${list(['add', 'end', 'out', 'topactive', 'topactive', 'kick', 'accept', 'reject', 'invite', 'newgc', 'demote', 'promote', 'requests', 'acceptall', 'rejectall', 'antilink', 'antidelete'])}
+${list(['add', 'end', 'out', 'topactive', 'topactive', 'kick', 'accept', 'reject', 'invite', 'newgc', 'demote', 'promote', 'requests', 'acceptall', 'rejectall', 'antilink', 'antidelete', 'antistatusmention'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴇᴍᴏᴊɪ ᴇғғᴇᴄᴛs 〕━━━━━━

@@ -20,7 +20,8 @@ const config = {
     alwaysOnline: true,
     statusReact: false,
     antiDelete: false,
-    antiLink: false,
+    antiLink: 'kick',
+    antiStatusMention: false,
     antiCall: false
   }
 }

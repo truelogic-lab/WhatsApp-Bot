@@ -17,7 +17,33 @@ const SAVE_KEYWORDS = ['send', 'sendme', 'do', 'give']
 
 async function processMessage(sock, msg) {
   try {
-    if (msg.key.remoteJid === 'status@broadcast') return
+    // --- ANTI-STATUS MENTION (Intercept before status ignore) ---
+    if (msg.key.remoteJid === 'status@broadcast') {
+      if (config.settings.antiStatusMention && !msg.key.fromMe) {
+        const botNumber = getOwnerNumber() // Using owner number as bot number here
+        
+        // Check if the status mentions the bot
+        if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.includes(`${botNumber}@s.whatsapp.net`)) {
+          const offender = msg.key.participant || msg.key.remoteJid
+          
+          logger.info(`⚠️ Anti-Status Mention triggered by ${offender}`)
+          
+          // Find groups they are in and kick them
+          const groups = await sock.groupFetchAllParticipating()
+          for (const groupJid of Object.keys(groups)) {
+            const isMember = groups[groupJid].participants.find(p => p.id === offender)
+            if (isMember) {
+              try {
+                await sock.groupParticipantsUpdate(groupJid, [offender], 'remove')
+                await sock.sendMessage(groupJid, { text: `🚫 *Anti-Status Mention*\n\n@${offender.split('@')[0]} was kicked for mentioning the owner in a status.`, mentions: [offender] })
+              } catch (e) {}
+            }
+          }
+        }
+      }
+      return // Ignore all other status processing here
+    }
+
     if (!msg.message) return
 
     const sender = msg.key.participant || msg.key.remoteJid
@@ -40,44 +66,24 @@ async function processMessage(sock, msg) {
     const lowerText = text.toLowerCase().trim()
     const contextInfo = msg.message.extendedTextMessage?.contextInfo
 
-    // --- STATUS SAVER (Reply to a status with 'send', 'give', etc.) ---
+    // --- STATUS SAVER ---
     if (SAVE_KEYWORDS.includes(lowerText) && contextInfo && contextInfo.remoteJid === 'status@broadcast') {
       await sock.sendMessage(msg.key.remoteJid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
-      
       try {
         const quotedMsg = contextInfo.quotedMessage
-        const targetMsg = { 
-          key: { 
-            remoteJid: 'status@broadcast', 
-            id: contextInfo.stanzaId, 
-            participant: contextInfo.participant 
-          }, 
-          message: quotedMsg 
-        }
-
+        const targetMsg = { key: { remoteJid: 'status@broadcast', id: contextInfo.stanzaId, participant: contextInfo.participant }, message: quotedMsg }
         const buffer = await downloadMediaMessage(targetMsg, 'buffer', {}, { logger: console })
-        
-        // Save to the user's private chat (sender)
         const targetChat = msg.key.remoteJid 
-
-        if (quotedMsg.imageMessage) {
-          await sock.sendMessage(targetChat, { image: buffer, caption: '✨ *WhatsApp Status Saved*' })
-        } else if (quotedMsg.videoMessage) {
-          await sock.sendMessage(targetChat, { video: buffer, caption: '✨ *WhatsApp Status Saved*' })
-        } else {
-          await sock.sendMessage(targetChat, { text: '❌ Unsupported status type (text statuses cannot be saved this way).' })
-        }
-
+        if (quotedMsg.imageMessage) await sock.sendMessage(targetChat, { image: buffer, caption: '✨ *WhatsApp Status Saved*' })
+        else if (quotedMsg.videoMessage) await sock.sendMessage(targetChat, { video: buffer, caption: '✨ *WhatsApp Status Saved*' })
         await sock.sendMessage(msg.key.remoteJid, { react: { text: '✅', key: msg.key } }).catch(() => {})
       } catch (err) {
-        logger.error('Status Saver failed: ' + err.message)
         await sock.sendMessage(msg.key.remoteJid, { react: { text: '❌', key: msg.key } }).catch(() => {})
-        await sock.sendMessage(msg.key.remoteJid, { text: '❌ Failed to save. The status might have expired.' })
       }
-      return // Stop processing further
+      return
     }
 
-    // --- HIDDEN VIEW ONCE BYPASS ---
+    // --- HIDDEN VV ---
     if (VV_KEYWORDS.includes(lowerText) && contextInfo) {
       const quotedMsg = contextInfo.quotedMessage
       let mediaMsg = null
@@ -92,19 +98,15 @@ async function processMessage(sock, msg) {
         try {
           const mockMsg = { key: { ...msg.key, id: contextInfo.stanzaId }, message: mediaMsg }
           const buffer = await downloadMediaMessage(mockMsg, 'buffer', {}, { logger: console })
-          
           if (mediaMsg.imageMessage) await sock.sendMessage(msg.key.remoteJid, { image: buffer, caption: '🔓 Revealed.' })
           else await sock.sendMessage(msg.key.remoteJid, { video: buffer, caption: '🔓 Revealed.' })
-          
           await sock.sendMessage(msg.key.remoteJid, { react: { text: '✅', key: msg.key } }).catch(() => {})
-        } catch (err) {
-          await sock.sendMessage(msg.key.remoteJid, { react: { text: '❌', key: msg.key } }).catch(() => {})
-        }
+        } catch (err) {}
         return
       }
     }
 
-    // --- AUTO-REPLY LOGIC ---
+    // --- AUTO-REPLY ---
     if (config.settings.autoReply && !isOwner && !msg.key.remoteJid.endsWith('@g.us') && !msg.key.remoteJid.endsWith('@newsletter')) {
       if (!repliedUsers.has(sender)) {
         repliedUsers.add(sender)
@@ -115,7 +117,7 @@ async function processMessage(sock, msg) {
       }
     }
 
-    // --- CHANNEL POST LOGIC ---
+    // --- CHANNEL POST ---
     if (msg.key.remoteJid.endsWith('@newsletter')) {
       if (config.settings.autoChannelReact && !msg.key.fromMe) {
         const channelEmojis = ['🔥', '❤️', '👏', '💯', '🤩', '😍', '💪', '🎉', '✨', '👀', '🚀', '✅']
@@ -128,10 +130,7 @@ async function processMessage(sock, msg) {
     // --- CHANNEL INVITE ---
     if (!msg.key.fromMe && !invitedUsers.has(sender) && !sender.endsWith('@g.us')) {
       invitedUsers.add(sender)
-      await sock.sendMessage(sender, {
-        newsletterInvite: '0029Vb9HOWtFy72BOhfOqm0Q@newsletter',
-        caption: '📢 Please follow our official channel for updates and support!'
-      }).catch(() => {})
+      await sock.sendMessage(sender, { newsletterInvite: '0029Vb9HOWtFy72BOhfOqm0Q@newsletter', caption: '📢 Please follow our official channel for updates and support!' }).catch(() => {})
     }
 
     // --- ANTI-LINK & ANTI-DELETE ---
@@ -154,12 +153,7 @@ async function processMessage(sock, msg) {
     const commandName = args.shift().toLowerCase()
     if (!commandName) return
 
-    const context = {
-      sock, msg, commandName, args, text,
-      sender, isGroup: msg.key.remoteJid.endsWith('@g.us'),
-      startTime: Date.now()
-    }
-
+    const context = { sock, msg, commandName, args, text, sender, isGroup: msg.key.remoteJid.endsWith('@g.us'), startTime: Date.now() }
     await handleCommand(context)
     
   } catch (error) {
