@@ -7,8 +7,7 @@ module.exports = {
   permission: 'owner',
   aliases: ['broadcast', 'restart', 'owner'],
   execute: async ({ sock, jid, args, config, commandName }) => {
-    
-    // 1. Send Owner Contact Card (Hardcoded)
+
     if (commandName === 'owner') {
       const ownerNumber = getOwnerNumber()
       const contactNumber = `+${ownerNumber}`

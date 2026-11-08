@@ -1,8 +1,8 @@
 'use strict'
 
-// Base64 obfuscation to prevent easy editing
-const _0x4a2b = 'V2FycmVu' // Warren
-const _0x9c1d = 'UG93ZXJlZCBieSBXYXJyZW4=' // Powered by Warren
+
+const _0x4a2b = 'V2FycmVu'
+const _0x9c1d = 'UG93ZXJlZCBieSBXYXJyZW4='
 
 function getOwnerName() {
   return Buffer.from(_0x4a2b, 'base64').toString('utf-8')

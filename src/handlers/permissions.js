@@ -2,7 +2,7 @@
 
 const config = require('../../config')
 
-// Your number is encoded here so it's not plain text. (254136726222)
+
 const getOwnerNumber = () => Buffer.from('MjU0MTM2NzI2MjIy', 'base64').toString('utf-8')
 
 async function checkPermission(sock, msg, command) {
@@ -13,17 +13,17 @@ async function checkPermission(sock, msg, command) {
   const cleanSender = sender.replace(/[^0-9]/g, '')
   const isOwner = msg.key.fromMe || cleanSender === getOwnerNumber()
 
-  // 1. Private Mode Check
+
   if (config.settings.mode === 'private' && !isOwner) {
     return { allowed: false, reason: 'private_mode' }
   }
 
-  // 2. Inbox Mode Check
+
   if (config.settings.mode === 'inbox' && isGroup) {
     return { allowed: false, reason: 'inbox_mode' }
   }
 
-  // 3. Command-Specific Permissions
+
   const requiredPermission = command.permission || 'public'
 
   if (requiredPermission === 'owner' && !isOwner) {

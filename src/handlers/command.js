@@ -23,7 +23,7 @@ async function handleCommand(context) {
   }
 
   try {
-    // React with Hourglass (⏳)
+
     await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
 
     if (config.settings.autoTyping) {

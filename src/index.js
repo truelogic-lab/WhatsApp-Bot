@@ -13,7 +13,7 @@ async function start() {
   try {
     logger.info(`Starting ${config.botName} v${config.version}...`)
 
-    // Connect to MongoDB (if configured)
+
     await connectDB()
     await syncConfig(config)
     logger.info(`Loaded settings. Mode: ${config.settings.mode}`)

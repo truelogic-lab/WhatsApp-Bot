@@ -9,7 +9,7 @@ const { handleMessageUpdate } = require('./antidelete')
 const menuCommand = require('../commands/main/menu')
 const { startCronJobs } = require('../utils/cron')
 const { loadDB } = require('../utils/database')
-const { useMongoAuthState } = require('../utils/sessionStore') // Added Mongo import
+const { useMongoAuthState } = require('../utils/sessionStore')
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
 const question = (text) => new Promise((resolve) => rl.question(text, resolve))
@@ -23,6 +23,7 @@ const reactedStatuses = new Set()
 const userCooldowns = new Map() 
 
 let statusQueue = Promise.resolve()
+let keepAliveInterval = null // Store the interval globally
 
 async function processStatus(sock, msg) {
   try {
@@ -33,7 +34,7 @@ async function processStatus(sock, msg) {
     const statusId = `${participant}:${key.id}`
     if (reactedStatuses.has(statusId)) return
 
-    const db = await loadDB() // Await DB load
+    const db = await loadDB()
     const isVip = db.vipStatusContacts && db.vipStatusContacts.includes(participant.split('@')[0])
 
     const now = Date.now()
@@ -56,33 +57,32 @@ async function processStatus(sock, msg) {
 
       reactedStatuses.add(statusId)
       userCooldowns.set(participant, now)
-      
-      logger.info(`❤️ Reacted to status from ${participant} with ${randomEmoji} ${isVip ? '(VIP)' : ''}`)
     }
   } catch (error) {
-    logger.error(`Status processing failed: ${error.message}`)
+    // Silently ignore
   }
 }
 
 async function connectToWhatsApp() {
+  // Clear any existing keep-alive interval to prevent memory leaks
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval)
+    keepAliveInterval = null
+  }
+
   let state, saveCreds
 
-  // DYNAMIC SESSION STORAGE (MongoDB vs Local)
   if (process.env.MONGO_URI) {
     try {
-      logger.info('⏳ Connecting to MongoDB for session storage...')
       const authState = await useMongoAuthState()
       state = authState.state
       saveCreds = authState.saveCreds
-      logger.info('✅ MongoDB Session Store initialized.')
     } catch (err) {
-      logger.error(`Failed to init MongoDB session: ${err.message}. Falling back to local.`)
       const localAuth = await useMultiFileAuthState(config.sessionDir)
       state = localAuth.state
       saveCreds = localAuth.saveCreds
     }
   } else {
-    logger.info('📂 Using local file session storage.')
     const localAuth = await useMultiFileAuthState(config.sessionDir)
     state = localAuth.state
     saveCreds = localAuth.saveCreds
@@ -103,10 +103,10 @@ async function connectToWhatsApp() {
 
   sock.ev.on('creds.update', saveCreds)
 
-  // Keep Alive Ping (Only if alwaysOnline is ON)
-  setInterval(() => {
+  // Single keep-alive interval (store globally to clear on reconnect)
+  keepAliveInterval = setInterval(() => {
     if (sock.user && config.settings.alwaysOnline) {
-      sock.sendPresenceUpdate('available')
+      sock.sendPresenceUpdate('available').catch(() => {}) // Added catch to prevent crash
     }
   }, 240000)
 
@@ -152,12 +152,18 @@ async function connectToWhatsApp() {
     }
 
     if (connection === 'close') {
+      // Clear keep-alive to prevent "Connection Closed" errors
+      if (keepAliveInterval) {
+        clearInterval(keepAliveInterval)
+        keepAliveInterval = null
+      }
+
       const statusCode = lastDisconnect?.error?.output?.statusCode
       if (statusCode !== DisconnectReason.loggedOut) {
         logger.warn(`Connection closed (Code: ${statusCode}). Reconnecting in 5s...`)
-        setTimeout(() => connectToWhatsApp(), 5000) // 5-second delay to prevent spam loops
+        setTimeout(() => connectToWhatsApp(), 5000)
       } else {
-        logger.error('Session logged out. Please delete data/session or MongoDB doc and re-pair.')
+        logger.error('Session logged out. Please re-pair.')
         process.exit(1)
       }
     } else if (connection === 'open') {
@@ -165,7 +171,7 @@ async function connectToWhatsApp() {
       rl.close()
       
       if (config.settings.alwaysOnline) {
-        await sock.sendPresenceUpdate('available')
+        await sock.sendPresenceUpdate('available').catch(() => {})
       }
 
       startCronJobs(sock)

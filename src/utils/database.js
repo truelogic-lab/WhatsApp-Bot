@@ -13,7 +13,7 @@ let mongoClient = null
 let mongoDb = null
 let useMongo = false
 
-// Connect to MongoDB (if MONGO_URI is provided)
+
 async function connectDB() {
   if (process.env.MONGO_URI) {
     try {
@@ -31,7 +31,7 @@ async function connectDB() {
   }
 }
 
-// Local JSON Fallback
+
 function loadLocal() {
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, JSON.stringify({ settings: {}, prefix: '.', activity: {} }, null, 2))

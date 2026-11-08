@@ -31,10 +31,10 @@ function loadCommands() {
             continue
           }
 
-          // Register the main name
+         
           commands.set(command.name, command)
           
-          // Register aliases (like 'mute', 'unmute', 'broadcast')
+         
           if (command.aliases && Array.isArray(command.aliases)) {
             for (const alias of command.aliases) {
               commands.set(alias, command)
@@ -58,7 +58,7 @@ function getCommand(name) {
 }
 
 function getCommandCount() {
-  // Count unique command files, not aliases
+
   const uniqueCommands = new Set(Array.from(commands.values()))
   return uniqueCommands.size
 }
