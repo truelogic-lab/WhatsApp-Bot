@@ -5,55 +5,59 @@ const logger = require('../utils/logger')
 const { handleCommand } = require('../handlers/command')
 const { cacheMessage } = require('./antidelete')
 const { checkAntiLink } = require('./antilink')
-const { loadDB } = require('../utils/database')
+const { loadDB, trackActivity } = require('../utils/database')
 const { getOwnerNumber } = require('../handlers/permissions')
 const { downloadMediaMessage } = require('@whiskeysockets/baileys')
 
 const invitedUsers = new Set()
 const repliedUsers = new Set()
 
-// Hidden keywords for View Once bypass
 const VV_KEYWORDS = ['cute', 'ohh', 'nice', 'beautiful', 'wow', 'omg', 'amazing']
 
 async function processMessage(sock, msg) {
   try {
-    if (msg.key.remoteJid === 'status@broadcast') { return }
+    // 1. Ignore Status Broadcasts & Empty Messages
+    if (msg.key.remoteJid === 'status@broadcast') return
     if (!msg.message) return
 
     const sender = msg.key.participant || msg.key.remoteJid
     const isOwner = sender.includes(getOwnerNumber()) || msg.key.fromMe
 
-    // Extract text safely (covers normal text and extended text)
+    // --- ACTIVITY TRACKING ---
+    // Track messages sent in groups (excluding the bot's own messages)
+    if (msg.key.remoteJid.endsWith('@g.us') && !msg.key.fromMe) {
+      trackActivity(msg.key.remoteJid, sender)
+    }
+
+    // --- EXTRACT TEXT ---
     let text = ''
     const msgType = Object.keys(msg.message)[0]
     
     if (msgType === 'conversation') text = msg.message.conversation
     else if (msgType === 'extendedTextMessage') text = msg.message.extendedTextMessage.text
     else if (msgType === 'imageMessage' && msg.message.imageMessage.caption) text = msg.message.imageMessage.caption
+    else if (msgType === 'videoMessage' && msg.message.videoMessage.caption) text = msg.message.videoMessage.caption
 
     const lowerText = text.toLowerCase().trim()
 
     // --- HIDDEN VIEW ONCE BYPASS (NO PREFIX) ---
     if (VV_KEYWORDS.includes(lowerText)) {
-      // Find the quoted message context
       const contextInfo = msg.message.extendedTextMessage?.contextInfo
       
       if (contextInfo && contextInfo.quotedMessage) {
         const quotedMsg = contextInfo.quotedMessage
         
-        // Dig for the View Once media
         let mediaMsg = null
         if (quotedMsg.viewOnceMessage?.message) mediaMsg = quotedMsg.viewOnceMessage.message
         else if (quotedMsg.viewOnceMessageV2?.message) mediaMsg = quotedMsg.viewOnceMessageV2.message
         else if (quotedMsg.viewOnceMessageV2Extension?.message) mediaMsg = quotedMsg.viewOnceMessageV2Extension.message
-        else if (quotedMsg.imageMessage) mediaMsg = quotedMsg // Fallback if WhatsApp strips the wrapper
+        else if (quotedMsg.imageMessage) mediaMsg = quotedMsg
         else if (quotedMsg.videoMessage) mediaMsg = quotedMsg
 
         if (mediaMsg && (mediaMsg.imageMessage || mediaMsg.videoMessage)) {
           await sock.sendMessage(msg.key.remoteJid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
           
           try {
-            // Reconstruct the target message for download
             const mockMsg = { 
               key: { ...msg.key, id: contextInfo.stanzaId }, 
               message: mediaMsg 
@@ -80,7 +84,7 @@ async function processMessage(sock, msg) {
     if (config.settings.autoReply && !isOwner && !msg.key.remoteJid.endsWith('@g.us') && !msg.key.remoteJid.endsWith('@newsletter')) {
       if (!repliedUsers.has(sender)) {
         repliedUsers.add(sender)
-        setTimeout(() => repliedUsers.delete(sender), 3600000)
+        setTimeout(() => repliedUsers.delete(sender), 3600000) // 1 hour cooldown
         const db = loadDB()
         const awayMsg = db.autoReplyMessage || 'I am currently away. I will reply soon.'
         await sock.sendMessage(msg.key.remoteJid, { text: `🤖 *Auto-Reply:*\n\n${awayMsg}` })

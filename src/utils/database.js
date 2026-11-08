@@ -13,14 +13,16 @@ if (!fs.existsSync(dataDir)) {
 
 function loadDB() {
   if (!fs.existsSync(dbPath)) {
-    fs.writeFileSync(dbPath, JSON.stringify({ settings: {}, prefix: '.' }, null, 2))
-    return { settings: {}, prefix: '.' }
+    fs.writeFileSync(dbPath, JSON.stringify({ settings: {}, prefix: '.', activity: {} }, null, 2))
+    return { settings: {}, prefix: '.', activity: {} }
   }
   try {
-    return JSON.parse(fs.readFileSync(dbPath, 'utf8'))
+    const data = JSON.parse(fs.readFileSync(dbPath, 'utf8'))
+    if (!data.activity) data.activity = {} // Ensure activity object exists
+    return data
   } catch (error) {
     logger.error('Failed to parse database.json. Resetting to default.')
-    return { settings: {}, prefix: '.' }
+    return { settings: {}, prefix: '.', activity: {} }
   }
 }
 
@@ -34,28 +36,26 @@ function saveDB(data) {
 
 function syncConfig(config) {
   const db = loadDB()
-  
-  if (db.settings) {
-    config.settings = { ...config.settings, ...db.settings }
-  }
-  
-  if (db.prefix) {
-    config.prefix = db.prefix
-  }
-  
+  if (db.settings) config.settings = { ...config.settings, ...db.settings }
+  if (db.prefix) config.prefix = db.prefix
   return config
 }
 
 function updateSetting(key, value) {
   const db = loadDB()
-  
-  if (key === 'prefix') {
-    db.prefix = value
-  } else {
-    db.settings[key] = value
-  }
-  
+  if (key === 'prefix') db.prefix = value
+  else db.settings[key] = value
   saveDB(db)
 }
 
-module.exports = { loadDB, saveDB, syncConfig, updateSetting }
+// NEW: Track user activity
+function trackActivity(groupJid, userJid) {
+  const db = loadDB()
+  if (!db.activity[groupJid]) db.activity[groupJid] = {}
+  if (!db.activity[groupJid][userJid]) db.activity[groupJid][userJid] = 0
+  
+  db.activity[groupJid][userJid] += 1
+  saveDB(db)
+}
+
+module.exports = { loadDB, saveDB, syncConfig, updateSetting, trackActivity }
