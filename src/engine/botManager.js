@@ -16,34 +16,17 @@ async function syncBots() {
     if (error) throw error
 
     for (const bot of bots) {
-      if (!activeBots.has(bot.id)) {
+      if (!activeBots.has(bot.id) && bot.status === 'deploying') {
+        
+        // Mark as 'starting' IMMEDIATELY so the next poll doesn't pick it up
+        await supabase.from('bots').update({ status: 'starting' }).eq('id', bot.id)
+        
         logger.info(`🚀 Spinning up bot: ${bot.name} (${bot.id})`)
-
-        // Mark as deploying (was 'online' before)
-        if (bot.status === 'online') {
-          await supabase.from('bots').update({ status: 'deploying' }).eq('id', bot.id)
-        }
-
-        // ⭐ Pass bot.phone as third argument
-        const sock = await connectToWhatsApp(bot.id, bot.session_data, bot.phone)
-
+        
+        const sock = await connectToWhatsApp(bot.id, bot.phone)
         activeBots.set(bot.id, { sock, userId: bot.user_id })
-
-        // ⭐ DO NOT set status to 'online' here.
-        // connection.js will set it when WhatsApp actually pairs.
       }
     }
-
-    // Clean up removed/suspended bots
-    for (const [botId, botData] of activeBots.entries()) {
-      const dbBot = bots.find(b => b.id === botId)
-      if (!dbBot || dbBot.status === 'suspended') {
-        logger.info(`🛑 Stopping bot: ${botId}`)
-        await botData.sock.end(undefined)
-        activeBots.delete(botId)
-      }
-    }
-
   } catch (err) {
     logger.error('Bot Manager Sync Error: ' + err.message)
   }
