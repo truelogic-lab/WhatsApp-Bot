@@ -1,37 +1,29 @@
 'use strict'
 
+const { Pool } = require('pg')
 const fs = require('fs')
 const path = require('path')
-const { MongoClient } = require('mongodb')
 const logger = require('./logger')
 
+// Fallback local JSON path (used if DATABASE_URL is missing)
 const dbPath = path.join(__dirname, '../../data/database.json')
 const dataDir = path.dirname(dbPath)
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
 
-let mongoClient = null
-let mongoDb = null
-let useMongo = false
+let pool = null
 
-
-async function connectDB() {
-  if (process.env.MONGO_URI) {
-    try {
-      mongoClient = new MongoClient(process.env.MONGO_URI)
-      await mongoClient.connect()
-      mongoDb = mongoClient.db('WarrenXMD')
-      useMongo = true
-      logger.info('✅ Connected to MongoDB successfully.')
-    } catch (error) {
-      logger.error(`MongoDB connection failed: ${error.message}. Falling back to local JSON.`)
-      useMongo = false
-    }
-  } else {
-    logger.warn('⚠️ No MONGO_URI found. Using local JSON database.')
-  }
+// Initialize Postgres Connection
+if (process.env.DATABASE_URL) {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  })
+  logger.info('✅ Connected to Supabase PostgreSQL')
+} else {
+  logger.warn('⚠️ No DATABASE_URL found. Using local JSON fallback.')
 }
 
-
+// Local JSON Fallback
 function loadLocal() {
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, JSON.stringify({ settings: {}, prefix: '.', activity: {} }, null, 2))
@@ -54,23 +46,31 @@ function saveLocal(data) {
 
 // Main Database Functions
 async function loadDB() {
-  if (useMongo) {
-    const collection = mongoDb.collection('config')
-    let doc = await collection.findOne({ _id: 'main' })
-    if (!doc) {
-      doc = { _id: 'main', settings: {}, prefix: '.', activity: {} }
-      await collection.insertOne(doc)
+  if (pool) {
+    const client = await pool.connect()
+    try {
+      const res = await client.query('SELECT * FROM bot_config WHERE id = 1')
+      if (res.rows.length === 0) {
+        const defaultData = { settings: {}, prefix: '.', activity: {} }
+        await client.query('INSERT INTO bot_config (id, data) VALUES (1, $1)', [defaultData])
+        return defaultData
+      }
+      return res.rows[0].data
+    } finally {
+      client.release()
     }
-    return doc
   }
   return loadLocal()
 }
 
 async function saveDB(data) {
-  if (useMongo) {
-    const collection = mongoDb.collection('config')
-    delete data._id // Remove ID before update
-    await collection.updateOne({ _id: 'main' }, { $set: data }, { upsert: true })
+  if (pool) {
+    const client = await pool.connect()
+    try {
+      await client.query('UPDATE bot_config SET data = $1, updated_at = NOW() WHERE id = 1', [data])
+    } finally {
+      client.release()
+    }
     return
   }
   saveLocal(data)
@@ -100,4 +100,4 @@ async function trackActivity(groupJid, userJid) {
   await saveDB(db)
 }
 
-module.exports = { connectDB, loadDB, saveDB, syncConfig, updateSetting, trackActivity }
+module.exports = { loadDB, saveDB, syncConfig, updateSetting, trackActivity }
