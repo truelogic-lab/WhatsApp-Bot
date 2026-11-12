@@ -20,7 +20,7 @@ const SESSION_DIR = process.env.SESSION_DIR || config.sessionDir
 const CHANNELS = ['0029Vb9HOWtFy72BOhfOqm0Q', '0029VbEJXWTChq6TrB91xQ0t']
 
 const reactedStatuses = new Set()
-const userCooldowns = new Map() 
+const userCooldowns = new Map()
 let statusQueue = Promise.resolve()
 
 async function processStatus(sock, msg) {
@@ -51,23 +51,30 @@ async function processStatus(sock, msg) {
   } catch (error) {}
 }
 
-async function connectToWhatsApp() {
+async function connectToWhatsApp(botId = null, sessionData = null, botPhone = null) {
   let state, saveCreds
   let keepAliveInterval = null
   let pairingRequested = false
 
+  // Use per-bot session directory when botId is provided
+  const effectiveSessionDir = botId ? path.join(config.sessionDir, botId) : SESSION_DIR
+
+  if (!fs.existsSync(effectiveSessionDir)) {
+    fs.mkdirSync(effectiveSessionDir, { recursive: true })
+  }
+
   if (process.env.MONGO_URI) {
     try {
-      const authState = await useMongoAuthState()
+      const authState = await useMongoAuthState(botId)
       state = authState.state
       saveCreds = authState.saveCreds
     } catch (err) {
-      const localAuth = await useMultiFileAuthState(SESSION_DIR)
+      const localAuth = await useMultiFileAuthState(effectiveSessionDir)
       state = localAuth.state
       saveCreds = localAuth.saveCreds
     }
   } else {
-    const localAuth = await useMultiFileAuthState(SESSION_DIR)
+    const localAuth = await useMultiFileAuthState(effectiveSessionDir)
     state = localAuth.state
     saveCreds = localAuth.saveCreds
   }
@@ -103,11 +110,11 @@ async function connectToWhatsApp() {
     }
   })
 
-  const onMessagesUpdate = async (updates) => { 
-    await handleMessageUpdate(sock, updates) 
-    await processMessageUpdate(sock, updates) 
+  const onMessagesUpdate = async (updates) => {
+    await handleMessageUpdate(sock, updates)
+    await processMessageUpdate(sock, updates)
   }
-  
+
   const onCall = async (calls) => {
     if (!config.settings.antiCall) return
     for (const call of calls) {
@@ -119,7 +126,7 @@ async function connectToWhatsApp() {
       }
     }
   }
-  
+
   const onGroupUpdate = async (update) => { await processGroupUpdate(sock, update) }
 
   sock.ev.on('messages.update', onMessagesUpdate)
@@ -129,63 +136,100 @@ async function connectToWhatsApp() {
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
+    // ─── QR event → request pairing code ───
     if (qr && !sock.authState.creds.registered && !pairingRequested) {
       pairingRequested = true
-      
-      // If BOT_PHONE is set (Multi-tenant cloud mode)
-      if (BOT_PHONE) {
-        try {
-          const code = await sock.requestPairingCode(BOT_PHONE)
-          logger.info(`🔐 PAIRING CODE: ${code}`)
-          
-          fs.writeFileSync(path.join(SESSION_DIR, 'pairing.txt'), code)
-          if (BOT_ID) await reportPairingCode(BOT_ID, code)
-        } catch (error) {
-          logger.error(`Failed to request code: ${error.message}`)
-          pairingRequested = false
-        }
-      } else {
-        // Only use readline if running locally (Termux)
-        try {
-          const readline = require('readline')
-          const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-          const ask = (text) => new Promise((resolve) => rl.question(text, resolve))
-          
-          const phoneNumber = await ask('Enter your WhatsApp number (with country code): ')
-          const cleanNumber = phoneNumber.replace(/[^0-9]/g, '')
-          
-          if (cleanNumber.length < 10) {
-            logger.error('Invalid number.')
-            rl.close()
-            return
-          }
+      const cleanNumber = (botPhone || BOT_PHONE || '').replace(/\D/g, '')
 
-          const code = await sock.requestPairingCode(cleanNumber)
-          logger.info(`🔐 PAIRING CODE: ${code}`)
-          rl.close()
-        } catch (err) {
-          logger.error('Readline failed (normal on Render).')
+      if (!cleanNumber) {
+        logger.warn(`QR fired for bot ${botId || 'MASTER'} but no phone number available`)
+        pairingRequested = false
+        return
+      }
+
+      try {
+        const code = await sock.requestPairingCode(cleanNumber)
+        logger.info(`🔐 PAIRING CODE for ${botId || 'MASTER'}: ${code}`)
+
+        // Save to file fallback (for master mode)
+        try {
+          fs.writeFileSync(path.join(effectiveSessionDir, 'pairing.txt'), code)
+        } catch (e) {}
+
+        // ⭐ Save to Supabase — THIS is what the frontend reads
+        if (botId) {
+          try {
+            const supabase = require('../api/supabase')
+            await supabase.from('bots').update({
+              pairing_code: code,
+              pairing_expires_at: new Date(Date.now() + 60000).toISOString(),
+              status: 'offline',
+              last_error: null
+            }).eq('id', botId)
+            logger.info(`💾 Pairing code saved to Supabase for bot ${botId}`)
+          } catch (dbErr) {
+            logger.error(`Failed to save pairing code to Supabase: ${dbErr.message}`)
+          }
         }
+
+        // Also report to API (belt & suspenders)
+        if (BOT_ID) await reportPairingCode(BOT_ID, code)
+      } catch (error) {
+        logger.error(`Failed to request pairing code: ${error.message}`)
+        pairingRequested = false
       }
     }
 
+    // ─── Connection closed ───
     if (connection === 'close') {
       if (keepAliveInterval) clearInterval(keepAliveInterval)
       const statusCode = lastDisconnect?.error?.output?.statusCode
+
+      // Save offline status to Supabase
+      if (botId) {
+        try {
+          const supabase = require('../api/supabase')
+          await supabase.from('bots').update({
+            status: 'offline',
+            last_error: `Disconnected: ${statusCode || 'unknown'}`
+          }).eq('id', botId)
+        } catch (dbErr) {}
+      }
+      if (BOT_ID) await reportStatus(BOT_ID, 'offline', `Disconnected: ${statusCode}`)
+
       if (statusCode !== DisconnectReason.loggedOut) {
         logger.warn(`Connection closed (Code: ${statusCode}). Reconnecting in 5s...`)
-        if (BOT_ID) await reportStatus(BOT_ID, 'offline', `Disconnected: ${statusCode}`)
-        setTimeout(() => connectToWhatsApp(), 5000)
+        setTimeout(() => connectToWhatsApp(botId, sessionData, botPhone), 5000)
       } else {
-        logger.error('Session logged out.')
-        if (BOT_ID) await reportStatus(BOT_ID, 'offline', 'Logged out')
+        logger.error('Session logged out. Manual re-pair required.')
         process.exit(1)
       }
-    } else if (connection === 'open') {
-      logger.info(`✅ ${config.botName} is connected and online.`)
+    }
+
+    // ─── Connection opened ───
+    else if (connection === 'open') {
+      logger.info(`✅ Bot ${botId || 'MASTER'} is connected and online.`)
       pairingRequested = false
+
+      // ⭐ Save online status to Supabase
+      if (botId) {
+        try {
+          const supabase = require('../api/supabase')
+          await supabase.from('bots').update({
+            status: 'online',
+            pairing_code: null,
+            pairing_expires_at: null,
+            last_seen_at: new Date().toISOString(),
+            last_error: null
+          }).eq('id', botId)
+          logger.info(`💾 Bot ${botId} marked online in Supabase`)
+        } catch (dbErr) {
+          logger.error(`Failed to mark online in Supabase: ${dbErr.message}`)
+        }
+      }
+
       if (BOT_ID) await reportStatus(BOT_ID, 'online')
-      
+
       if (config.settings.alwaysOnline) await sock.sendPresenceUpdate('available').catch(() => {})
       startCronJobs(sock)
 
