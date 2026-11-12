@@ -11,14 +11,14 @@ async function syncBots() {
     const { data: bots, error } = await supabase
       .from('bots')
       .select('*')
-      .in('status', ['deploying', 'online'])
+      .eq('status', 'deploying') // ONLY look for 'deploying'
 
     if (error) throw error
 
     for (const bot of bots) {
-      if (!activeBots.has(bot.id) && bot.status === 'deploying') {
+      if (!activeBots.has(bot.id)) {
         
-        // Mark as 'starting' IMMEDIATELY so the next poll doesn't pick it up
+        // Mark as 'starting' IMMEDIATELY
         await supabase.from('bots').update({ status: 'starting' }).eq('id', bot.id)
         
         logger.info(`🚀 Spinning up bot: ${bot.name} (${bot.id})`)
@@ -33,7 +33,7 @@ async function syncBots() {
 }
 
 function startBotManager() {
-  setInterval(syncBots, 10000)
+  setInterval(syncBots, 5000)
   logger.info('🤖 Bot Deployment Engine started.')
 }
 
