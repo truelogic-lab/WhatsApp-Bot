@@ -133,10 +133,14 @@ async function connectToWhatsApp(botId = null, phone = null) {
 
     if (qr && !sock.authState.creds.registered && !pairingRequested) {
       pairingRequested = true
-
+      
       if (BOT_PHONE) {
+        // Wait 5 seconds before requesting the code to ensure WhatsApp servers are ready
+        await new Promise(resolve => setTimeout(resolve, 5000))
+
         try {
-          const code = await sock.requestPairingCode(BOT_PHONE)
+          const cleanPhone = BOT_PHONE.replace(/\D/g, '')
+          const code = await sock.requestPairingCode(cleanPhone)
           logger.info(`🔐 PAIRING CODE for ${BOT_ID || 'MASTER'}: ${code}`)
 
           fs.writeFileSync(path.join(SESSION_DIR, 'pairing.txt'), code)
