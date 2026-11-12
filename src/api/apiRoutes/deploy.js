@@ -14,7 +14,7 @@ deployRouter.post('/', async (req, res) => {
 
   try {
     const cleanPhone = phone.replace(/\D/g, '')
-    
+
     const { data: bot, error } = await supabase
       .from('bots')
       .insert({
@@ -28,9 +28,9 @@ deployRouter.post('/', async (req, res) => {
 
     if (error) throw error
 
-    res.json({ 
-      message: 'Bot deployment started', 
-      botId: bot.id 
+    res.json({
+      message: 'Bot deployment started',
+      botId: bot.id
     })
 
   } catch (err) {
@@ -46,7 +46,7 @@ deployRouter.get('/:id', async (req, res) => {
       .select('id, status, pairing_code')
       .eq('id', req.params.id)
       .single()
-      
+
     if (error) throw error
     res.json(bot)
   } catch (err) {

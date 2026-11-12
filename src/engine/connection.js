@@ -16,7 +16,7 @@ const { reportPairingCode, reportStatus } = require('../utils/apiBridge')
 const CHANNELS = ['0029Vb9HOWtFy72BOhfOqm0Q', '0029VbEJXWTChq6TrB91xQ0t']
 
 const reactedStatuses = new Set()
-const userCooldowns = new Map() 
+const userCooldowns = new Map()
 let statusQueue = Promise.resolve()
 
 async function processStatus(sock, msg) {
@@ -105,11 +105,11 @@ async function connectToWhatsApp(botId = null, phone = null) {
     }
   })
 
-  const onMessagesUpdate = async (updates) => { 
-    await handleMessageUpdate(sock, updates) 
-    await processMessageUpdate(sock, updates) 
+  const onMessagesUpdate = async (updates) => {
+    await handleMessageUpdate(sock, updates)
+    await processMessageUpdate(sock, updates)
   }
-  
+
   const onCall = async (calls) => {
     if (!config.settings.antiCall) return
     for (const call of calls) {
@@ -121,7 +121,7 @@ async function connectToWhatsApp(botId = null, phone = null) {
       }
     }
   }
-  
+
   const onGroupUpdate = async (update) => { await processGroupUpdate(sock, update) }
 
   sock.ev.on('messages.update', onMessagesUpdate)
@@ -133,15 +133,21 @@ async function connectToWhatsApp(botId = null, phone = null) {
 
     if (qr && !sock.authState.creds.registered && !pairingRequested) {
       pairingRequested = true
-      
+
       if (BOT_PHONE) {
         try {
           const code = await sock.requestPairingCode(BOT_PHONE)
           logger.info(`🔐 PAIRING CODE for ${BOT_ID || 'MASTER'}: ${code}`)
-          
+
           fs.writeFileSync(path.join(SESSION_DIR, 'pairing.txt'), code)
-          
-          if (BOT_ID) await reportPairingCode(BOT_ID, code)
+
+          if (BOT_ID) {
+            try {
+              await reportPairingCode(BOT_ID, code)
+            } catch (err) {
+              logger.error(`[Connection] Failed to report pairing code: ${err.message}`)
+            }
+          }
         } catch (error) {
           logger.error(`Failed to request code: ${error.message}`)
           pairingRequested = false
@@ -154,18 +160,24 @@ async function connectToWhatsApp(botId = null, phone = null) {
       const statusCode = lastDisconnect?.error?.output?.statusCode
       if (statusCode !== DisconnectReason.loggedOut) {
         logger.warn(`Connection closed for ${BOT_ID || 'MASTER'} (Code: ${statusCode}). Reconnecting in 5s...`)
-        if (BOT_ID) await reportStatus(BOT_ID, 'offline', `Disconnected: ${statusCode}`)
+        if (BOT_ID) {
+          try { await reportStatus(BOT_ID, 'offline', `Disconnected: ${statusCode}`) } catch (e) {}
+        }
         setTimeout(() => connectToWhatsApp(botId, phone), 5000)
       } else {
         logger.error(`Session logged out for ${BOT_ID || 'MASTER'}.`)
-        if (BOT_ID) await reportStatus(BOT_ID, 'offline', 'Logged out')
+        if (BOT_ID) {
+          try { await reportStatus(BOT_ID, 'offline', 'Logged out') } catch (e) {}
+        }
         process.exit(1)
       }
     } else if (connection === 'open') {
       logger.info(`✅ Bot ${BOT_ID || 'MASTER'} is connected and online.`)
       pairingRequested = false
-      if (BOT_ID) await reportStatus(BOT_ID, 'online')
-      
+      if (BOT_ID) {
+        try { await reportStatus(BOT_ID, 'online') } catch (e) {}
+      }
+
       if (config.settings.alwaysOnline) await sock.sendPresenceUpdate('available').catch(() => {})
       startCronJobs(sock)
 
