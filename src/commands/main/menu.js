@@ -26,7 +26,7 @@ module.exports = {
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴍᴀɪɴ 〕━━━━━━
-${list(['ping', 'menu', 'mode', 'repo', 'botname', 'description', 'botdp', 'join', 'owner', 'prefix', 'update', 'restart', 'settings', 'broadcast'])}
+${list(['ping', 'menu', 'mode', 'repo', 'botname', 'description', 'botdp', 'reactemojis', 'owneremojis', 'join', 'owner', 'prefix', 'update', 'restart', 'settings', 'broadcast'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴛᴏᴏʟs 〕━━━━━━
@@ -42,11 +42,11 @@ ${list(['play', 'tiktok', 'instagram'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ɢʀᴏᴜᴘ sᴇᴛᴛɪɴɢs 〕━━━━━━
-${list(['tag', 'link', 'gcpp', 'mute', 'poll', 'ginfo', 'revoke', 'unmute', 'tagall', 'chvote', 'gcstatus', 'updategname', 'updategdesc'])}
+${list(['tag', 'link', 'gcpp', 'mute', 'poll', 'ginfo', 'revoke', 'unmute', 'tagall', 'chvote', 'welcome', 'setwelcome', 'goodbye', 'setgoodbye', 'gcstatus', 'updategname', 'updategdesc'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ɢʀᴏᴜᴘ ᴀᴄᴛɪᴏɴs 〕━━━━━━
-${list(['add', 'end', 'out', 'topactive', 'topactive', 'kick', 'accept', 'reject', 'invite', 'newgc', 'demote', 'promote', 'requests', 'acceptall', 'rejectall', 'antilink', 'antidelete', 'antistatusmention'])}
+${list(['add', 'end', 'out', 'topactive', 'topactive', 'kick', 'accept', 'reject', 'invite', 'newgc', 'demote', 'promote', 'requests', 'acceptall', 'rejectall', 'antilink', 'antidelete', 'antiedit', 'antistatusmention'])}
 ╰━━━━━━━━━━━━━━━━━━━━━━━
 
 ╭━━━━━━〔 ᴇᴍᴏᴊɪ ᴇғғᴇᴄᴛs 〕━━━━━━

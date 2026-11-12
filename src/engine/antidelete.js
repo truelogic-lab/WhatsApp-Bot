@@ -3,8 +3,8 @@
 const config = require('../../config')
 const logger = require('../utils/logger')
 const { downloadMediaMessage } = require('@whiskeysockets/baileys')
+const { getOwnerNumber } = require('../handlers/permissions')
 
-// In-memory cache (keeps last 150 messages to prevent memory leaks)
 const messageCache = new Map()
 
 function cacheMessage(msg) {
@@ -22,7 +22,6 @@ async function handleMessageUpdate(sock, updates) {
   if (!config.settings.antiDelete) return
 
   for (const update of updates) {
-    // WhatsApp uses two methods to indicate a deleted message
     const isRevoked = update.update?.messageStubType === 1 || 
                       update.update?.message?.protocolMessage?.type === 0
     
@@ -31,39 +30,81 @@ async function handleMessageUpdate(sock, updates) {
       const cachedMsg = messageCache.get(msgId)
       
       if (cachedMsg) {
-        const jid = update.key.remoteJid
+        const chatJid = update.key.remoteJid
         const sender = cachedMsg.key.participant || cachedMsg.key.remoteJid
         
+        const ownerJid = sock.user?.id ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : `${getOwnerNumber()}@s.whatsapp.net`
+        
         try {
-          // Check if it's text
+          let chatContext = ''
+          if (chatJid.endsWith('@g.us')) {
+            try {
+              const metadata = await sock.groupMetadata(chatJid)
+              chatContext = metadata.subject
+            } catch (e) {
+              chatContext = 'Unknown Group'
+            }
+          } else {
+            chatContext = 'Direct Message'
+          }
+
+          // Get saved contact name
+          let senderName = cachedMsg.pushName 
+          if (sock.store && sock.store.contacts && sock.store.contacts[sender]) {
+            const contact = sock.store.contacts[sender]
+            senderName = contact.name || contact.notify || contact.verifiedName || cachedMsg.pushName
+          } else if (sock.store && sock.store.contacts && sock.store.contacts[sender.split('@')[0] + '@s.whatsapp.net']) {
+            const contact = sock.store.contacts[sender.split('@')[0] + '@s.whatsapp.net']
+            senderName = contact.name || contact.notify || contact.verifiedName || cachedMsg.pushName
+          }
+
+          if (!senderName || senderName === '') {
+            senderName = sender.includes('@lid') ? 'Linked ID User' : `+${sender.split('@')[0]}`
+          }
+
           const text = cachedMsg.message.conversation || 
                        cachedMsg.message.extendedTextMessage?.text
                        
+          // --- DECORATED MESSAGE TEMPLATE ---
+          const header = `╭━━━━━━〔 ⚠️ ᴀɴᴛɪ-ᴅᴇʟᴇᴛᴇ 〕━━━━━━
+│ ◉ ᴄᴏɴᴛᴇxᴛ: ${chatContext}
+│ ◉ sᴇɴᴅᴇʀ: ${senderName}
+╰━━━━━━━━━━━━━━━━━━━━━━━`
+
           if (text) {
-            await sock.sendMessage(jid, { 
-              text: `⚠️ *Anti-Delete Alert*\n\n👤 *Sender:* @${sender.split('@')[0]}\n📝 *Message:* ${text}`,
-              mentions: [sender]
-            })
+            const finalMessage = `${header}\n\n📝 *Deleted Message:*\n> ${text}`
+            await sock.sendMessage(ownerJid, { text: finalMessage })
           } 
-          // Check if it's media (Image/Video)
-          else if (cachedMsg.message.imageMessage || cachedMsg.message.videoMessage) {
-            const type = cachedMsg.message.imageMessage ? 'image' : 'video'
+          else if (
+            cachedMsg.message.imageMessage || 
+            cachedMsg.message.videoMessage || 
+            cachedMsg.message.audioMessage ||
+            cachedMsg.message.stickerMessage
+          ) {
             const buffer = await downloadMediaMessage(cachedMsg, 'buffer', {}, { logger: console })
             
-            await sock.sendMessage(jid, { 
-              [type]: buffer,
-              caption: `⚠️ *Anti-Delete Alert*\n\n👤 *Sender:* @${sender.split('@')[0]}\n📝 *Deleted Media*`,
-              mentions: [sender]
-            })
+            const finalCaption = `${header}\n\n📝 *Deleted Media Detected*`
+
+            if (cachedMsg.message.imageMessage) {
+              await sock.sendMessage(ownerJid, { image: buffer, caption: finalCaption })
+            } else if (cachedMsg.message.videoMessage) {
+              await sock.sendMessage(ownerJid, { video: buffer, caption: finalCaption })
+            } else if (cachedMsg.message.audioMessage) {
+              await sock.sendMessage(ownerJid, { audio: buffer, mimetype: 'audio/mp4' })
+              await sock.sendMessage(ownerJid, { text: finalCaption })
+            } else if (cachedMsg.message.stickerMessage) {
+              await sock.sendMessage(ownerJid, { sticker: buffer })
+              await sock.sendMessage(ownerJid, { text: finalCaption })
+            }
           }
           
-          logger.info(`Anti-Delete triggered in ${jid} for message from ${sender}`)
+          logger.info(`Anti-Delete alert forwarded to owner inbox.`)
         } catch (err) {
-          logger.error(`Anti-Delete failed to recover media: ${err.message}`)
+          logger.error(`Anti-Delete failed to forward: ${err.message}`)
         }
       }
     }
   }
 }
 
-module.exports = { cacheMessage, handleMessageUpdate }
+module.exports = { cacheMessage, handleMessageUpdate, messageCache }

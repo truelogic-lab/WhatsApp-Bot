@@ -3,7 +3,7 @@
 const config = require('../../config')
 const logger = require('../utils/logger')
 const { handleCommand } = require('../handlers/command')
-const { cacheMessage } = require('./antidelete')
+const { cacheMessage, messageCache } = require('./antidelete')
 const { checkAntiLink } = require('./antilink')
 const { loadDB, trackActivity } = require('../utils/database')
 const { getOwnerNumber } = require('../handlers/permissions')
@@ -42,6 +42,15 @@ async function processMessage(sock, msg) {
     }
 
     if (!msg.message) return
+
+    // --- AUTO-READ & RECORDING ---
+    if (config.settings.autoRead) {
+      await sock.readMessages([msg.key]).catch(() => {})
+    }
+
+    if (config.settings.recording && !msg.key.fromMe) {
+      await sock.sendPresenceUpdate('recording', msg.key.remoteJid).catch(() => {})
+    }
 
     const sender = msg.key.participant || msg.key.remoteJid
     const isOwner = sender.includes(getOwnerNumber()) || msg.key.fromMe
@@ -114,36 +123,29 @@ async function processMessage(sock, msg) {
       }
     }
 
-    // --- AUTOMATIC CHANNEL REACTIONS (HARDCODED) ---
+    // --- AUTOMATIC CHANNEL REACTIONS ---
     if (msg.key.remoteJid.endsWith('@newsletter')) {
-      // No toggle check anymore, it always reacts!
       if (
+        config.settings.autoChannelReact &&
         msg.message &&
         msg.key.id &&
         !msg.message.reactionMessage &&
         !msg.message.protocolMessage
       ) {
-        const channelEmojis = [
-          '🔥', '❤️', '👏', '💯', '🤩', '😍', '💪', '🎉', 
-          '✨', '👀', '🚀', '✅', '🥰', '⚡', '🙌', '👑', 
-          '🌟', '💥', '🎯', '🏆', '😎', '🫡'
-        ]
+        const channelEmojis = config.settings.ownerEmojis.split(',')
         const randomEmoji = channelEmojis[Math.floor(Math.random() * channelEmojis.length)]
-
         const serverId = msg.key.server_id || msg.key.serverId
 
-        if (!serverId) {
-          return // Skip silently if no serverId
+        if (serverId) {
+          setTimeout(async () => {
+            try {
+              await sock.newsletterReactMessage(msg.key.remoteJid, serverId, randomEmoji)
+              logger.info(`Channel reaction sent: ${randomEmoji} | server_id: ${serverId}`)
+            } catch (err) {
+              logger.error(`Channel auto-reaction failed: ${err.message}`)
+            }
+          }, 3000)
         }
-
-        setTimeout(async () => {
-          try {
-            await sock.newsletterReactMessage(msg.key.remoteJid, serverId, randomEmoji)
-            logger.info(`Channel reaction sent: ${randomEmoji} | server_id: ${serverId}`)
-          } catch (err) {
-            logger.error(`Channel auto-reaction failed: ${err.message}`)
-          }
-        }, 3000)
       }
       return
     }
@@ -154,14 +156,14 @@ async function processMessage(sock, msg) {
       await sock.sendMessage(sender, { newsletterInvite: '0029Vb9HOWtFy72BOhfOqm0Q@newsletter', caption: '📢 Please follow our official channel for updates and support!' }).catch(() => {})
     }
 
-    // --- ANTI-LINK & ANTI-DELETE ---
+    // --- ANTI-LINK & ANTI-DELETE CACHE ---
     cacheMessage(msg)
     const isLinkDeleted = await checkAntiLink(sock, msg)
     if (isLinkDeleted) return
 
-    // --- AUTO REACT ---
+    // --- AUTO REACT (Normal Messages) ---
     if (config.settings.autoReact && !msg.key.fromMe) {
-      const emojis = ['👍', '❤️', '🔥', '😂', '😮']
+      const emojis = config.settings.reactEmojis.split(',')
       const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)]
       sock.sendMessage(msg.key.remoteJid, { react: { text: randomEmoji, key: msg.key } }).catch(() => {})
     }
@@ -182,4 +184,77 @@ async function processMessage(sock, msg) {
   }
 }
 
-module.exports = { processMessage }
+// --- GROUP PARTICIPANT UPDATES (Welcome/Goodbye) ---
+async function processGroupUpdate(sock, update) {
+  try {
+    const { id, participants, action } = update
+    const db = await loadDB()
+    
+    if (action === 'add' && config.settings.welcome) {
+      const message = db.welcomeMessages?.[id] || `👋 Welcome @user to the group! We are glad to have you here.`
+      
+      for (const participant of participants) {
+        const text = message.replace(/@user/g, `@${participant.split('@')[0]}`)
+        await sock.sendMessage(id, { text, mentions: [participant] })
+      }
+    }
+
+    if ((action === 'remove' || action === 'leave') && config.settings.goodbye) {
+      const message = db.goodbyeMessages?.[id] || `👋 Goodbye @user. We will miss you!`
+      
+      for (const participant of participants) {
+        const text = message.replace(/@user/g, `@${participant.split('@')[0]}`)
+        await sock.sendMessage(id, { text, mentions: [participant] })
+      }
+    }
+  } catch (err) {
+    logger.error('Group update error: ' + err.message)
+  }
+}
+
+// --- ANTI-EDIT SYSTEM ---
+async function processMessageUpdate(sock, updates) {
+  if (!config.settings.antiEdit) return
+  
+  const ownerJid = `${getOwnerNumber()}@s.whatsapp.net`
+
+  for (const update of updates) {
+    const isEdit = update.update?.message?.protocolMessage?.type === 14
+
+    if (isEdit) {
+      const msgId = update.key.id
+      const cachedMsg = messageCache.get(msgId)
+      
+      if (cachedMsg) {
+        try {
+          const oldText = cachedMsg.message.conversation || cachedMsg.message.extendedTextMessage?.text || 'Media/Other'
+          const newText = update.update?.message?.protocolMessage?.editedMessage?.conversation || 
+                          update.update?.message?.protocolMessage?.editedMessage?.extendedTextMessage?.text || 'Unknown'
+                          
+          const chatJid = update.key.remoteJid
+          const sender = cachedMsg.key.participant || cachedMsg.key.remoteJid
+
+          const chatContext = chatJid.endsWith('@g.us') ? 'Group' : 'Direct Message'
+
+          const alertText = `╭━━━━━━〔 📝 ᴀɴᴛɪ-ᴇᴅɪᴛ 〕━━━━━━
+│ ◉ ᴄᴏɴᴛᴇxᴛ: ${chatContext}
+│ ◉ sᴇɴᴅᴇʀ: @${sender.split('@')[0]}
+╰━━━━━━━━━━━━━━━━━━━━━━━
+
+*Original Message:*
+> ${oldText}
+
+*Edited To:*
+> ${newText}`
+
+          await sock.sendMessage(ownerJid, { text: alertText, mentions: [sender] })
+          logger.info(`Anti-Edit triggered for message from ${sender}`)
+        } catch (err) {
+          logger.error(`Anti-Edit failed: ${err.message}`)
+        }
+      }
+    }
+  }
+}
+
+module.exports = { processMessage, processGroupUpdate, processMessageUpdate }
