@@ -11,7 +11,6 @@ const menuCommand = require('../commands/main/menu')
 const { startCronJobs } = require('../utils/cron')
 const { loadDB } = require('../utils/database')
 
-// Simple env vars
 const BOT_PHONE = process.env.BOT_PHONE ? process.env.BOT_PHONE.replace(/\D/g, '') : null
 const SESSION_DIR = process.env.SESSION_DIR || config.sessionDir
 
@@ -20,10 +19,8 @@ async function connectToWhatsApp() {
   let keepAliveInterval = null
   let pairingRequested = false
 
-  // Ensure session folder exists
   if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR, { recursive: true })
 
-  // Use local file auth state (Render will wipe this on restart unless you use a persistent disk)
   const { state: localState, saveCreds: localSaveCreds } = await useMultiFileAuthState(SESSION_DIR)
   state = localState
   saveCreds = localSaveCreds
@@ -87,12 +84,11 @@ async function connectToWhatsApp() {
 
       if (BOT_PHONE) {
         try {
-          // Request the code directly
           const code = await sock.requestPairingCode(BOT_PHONE)
           
-          // Print it in the Render logs so you can copy it
           logger.info(`\n=========================================`)
           logger.info(`🔐 PAIRING CODE: ${code}`)
+          logger.info(`⚠️  EXPIRES IN 60 SECONDS!`)
           logger.info(`=========================================\n`)
           
           fs.writeFileSync(path.join(SESSION_DIR, 'pairing.txt'), code)
@@ -106,12 +102,15 @@ async function connectToWhatsApp() {
     if (connection === 'close') {
       if (keepAliveInterval) clearInterval(keepAliveInterval)
       const statusCode = lastDisconnect?.error?.output?.statusCode
-      if (statusCode !== DisconnectReason.loggedOut) {
+      
+      if (statusCode === DisconnectReason.loggedOut) {
+        logger.error(`❌ Session logged out. Deleting session and restarting...`)
+        // Delete session so we can get a new code
+        fs.rmSync(SESSION_DIR, { recursive: true, force: true })
+        setTimeout(() => connectToWhatsApp(), 3000)
+      } else {
         logger.warn(`Connection closed (Code: ${statusCode}). Reconnecting in 5s...`)
         setTimeout(() => connectToWhatsApp(), 5000)
-      } else {
-        logger.error(`Session logged out. Please delete the data/session folder and restart.`)
-        process.exit(1)
       }
     } else if (connection === 'open') {
       logger.info(`✅ ${config.botName} is connected and online.`)
