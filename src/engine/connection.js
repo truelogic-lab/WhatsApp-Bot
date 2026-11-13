@@ -10,69 +10,23 @@ const { handleMessageUpdate } = require('./antidelete')
 const menuCommand = require('../commands/main/menu')
 const { startCronJobs } = require('../utils/cron')
 const { loadDB } = require('../utils/database')
-const { useMongoAuthState } = require('../utils/sessionStore')
-const { reportPairingCode, reportStatus } = require('../utils/apiBridge')
 
-const CHANNELS = ['0029Vb9HOWtFy72BOhfOqm0Q', '0029VbEJXWTChq6TrB91xQ0t']
+// Simple env vars
+const BOT_PHONE = process.env.BOT_PHONE ? process.env.BOT_PHONE.replace(/\D/g, '') : null
+const SESSION_DIR = process.env.SESSION_DIR || config.sessionDir
 
-const reactedStatuses = new Set()
-const userCooldowns = new Map()
-let statusQueue = Promise.resolve()
-
-async function processStatus(sock, msg) {
-  try {
-    const key = msg.key
-    const participant = key?.participant || key?.remoteJid
-    if (!key?.id || !participant || key.fromMe) return
-
-    const statusId = `${participant}:${key.id}`
-    if (reactedStatuses.has(statusId)) return
-
-    const db = await loadDB()
-    const isVip = db.vipStatusContacts && db.vipStatusContacts.includes(participant.split('@')[0])
-    const now = Date.now()
-    const lastReaction = userCooldowns.get(participant) || 0
-    if (!isVip && (now - lastReaction < 10000)) return
-
-    if (config.settings.autoStatus || isVip) await sock.readMessages([key]).catch(() => {})
-    if (config.settings.statusReact || isVip) {
-      const statusEmojis = config.settings.ownerEmojis.split(',')
-      const randomEmoji = statusEmojis[Math.floor(Math.random() * statusEmojis.length)]
-      await sock.sendMessage('status@broadcast', { react: { text: randomEmoji, key: key } }, { statusJidList: [participant] }).catch(() => {})
-      reactedStatuses.add(statusId)
-      userCooldowns.set(participant, now)
-      if (reactedStatuses.size > 5000) reactedStatuses.clear()
-      if (userCooldowns.size > 1000) userCooldowns.clear()
-    }
-  } catch (error) {}
-}
-
-async function connectToWhatsApp(botId = null, phone = null) {
+async function connectToWhatsApp() {
   let state, saveCreds
   let keepAliveInterval = null
   let pairingRequested = false
 
-  const BOT_ID = botId || process.env.BOT_ID || null
-  const BOT_PHONE = phone ? phone.replace(/\D/g, '') : (process.env.BOT_PHONE ? process.env.BOT_PHONE.replace(/\D/g, '') : null)
-  const SESSION_DIR = BOT_ID ? `./data/sessions/${BOT_ID}` : (process.env.SESSION_DIR || config.sessionDir)
-
+  // Ensure session folder exists
   if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR, { recursive: true })
 
-  if (process.env.MONGO_URI) {
-    try {
-      const authState = await useMongoAuthState()
-      state = authState.state
-      saveCreds = authState.saveCreds
-    } catch (err) {
-      const localAuth = await useMultiFileAuthState(SESSION_DIR)
-      state = localAuth.state
-      saveCreds = localAuth.saveCreds
-    }
-  } else {
-    const localAuth = await useMultiFileAuthState(SESSION_DIR)
-    state = localAuth.state
-    saveCreds = localAuth.saveCreds
-  }
+  // Use local file auth state (Render will wipe this on restart unless you use a persistent disk)
+  const { state: localState, saveCreds: localSaveCreds } = await useMultiFileAuthState(SESSION_DIR)
+  state = localState
+  saveCreds = localSaveCreds
 
   const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }))
 
@@ -97,10 +51,7 @@ async function connectToWhatsApp(botId = null, phone = null) {
     if (m.type !== 'notify') return
     for (const msg of m.messages) {
       const remoteJid = msg.key?.remoteJid
-      if (remoteJid === 'status@broadcast') {
-        statusQueue = statusQueue.then(() => processStatus(sock, msg))
-        continue
-      }
+      if (remoteJid === 'status@broadcast') continue
       await processMessage(sock, msg)
     }
   })
@@ -116,7 +67,7 @@ async function connectToWhatsApp(botId = null, phone = null) {
       if (call.status === 'offer') {
         try {
           await sock.rejectCall(call.id, call.from)
-          await sock.sendMessage(call.from, { text: '📵 *Anti-Call System*\n\nThis bot does not accept voice or video calls. Please send a text message instead.' })
+          await sock.sendMessage(call.from, { text: '📵 *Anti-Call System*\n\nThis bot does not accept voice or video calls.' })
         } catch (error) {}
       }
     }
@@ -133,25 +84,18 @@ async function connectToWhatsApp(botId = null, phone = null) {
 
     if (qr && !sock.authState.creds.registered && !pairingRequested) {
       pairingRequested = true
-      
+
       if (BOT_PHONE) {
-        // Wait 5 seconds before requesting the code to ensure WhatsApp servers are ready
-        await new Promise(resolve => setTimeout(resolve, 5000))
-
         try {
-          const cleanPhone = BOT_PHONE.replace(/\D/g, '')
-          const code = await sock.requestPairingCode(cleanPhone)
-          logger.info(`🔐 PAIRING CODE for ${BOT_ID || 'MASTER'}: ${code}`)
-
+          // Request the code directly
+          const code = await sock.requestPairingCode(BOT_PHONE)
+          
+          // Print it in the Render logs so you can copy it
+          logger.info(`\n=========================================`)
+          logger.info(`🔐 PAIRING CODE: ${code}`)
+          logger.info(`=========================================\n`)
+          
           fs.writeFileSync(path.join(SESSION_DIR, 'pairing.txt'), code)
-
-          if (BOT_ID) {
-            try {
-              await reportPairingCode(BOT_ID, code)
-            } catch (err) {
-              logger.error(`[Connection] Failed to report pairing code: ${err.message}`)
-            }
-          }
         } catch (error) {
           logger.error(`Failed to request code: ${error.message}`)
           pairingRequested = false
@@ -163,36 +107,18 @@ async function connectToWhatsApp(botId = null, phone = null) {
       if (keepAliveInterval) clearInterval(keepAliveInterval)
       const statusCode = lastDisconnect?.error?.output?.statusCode
       if (statusCode !== DisconnectReason.loggedOut) {
-        logger.warn(`Connection closed for ${BOT_ID || 'MASTER'} (Code: ${statusCode}). Reconnecting in 5s...`)
-        if (BOT_ID) {
-          try { await reportStatus(BOT_ID, 'offline', `Disconnected: ${statusCode}`) } catch (e) {}
-        }
-        setTimeout(() => connectToWhatsApp(botId, phone), 5000)
+        logger.warn(`Connection closed (Code: ${statusCode}). Reconnecting in 5s...`)
+        setTimeout(() => connectToWhatsApp(), 5000)
       } else {
-        logger.error(`Session logged out for ${BOT_ID || 'MASTER'}.`)
-        if (BOT_ID) {
-          try { await reportStatus(BOT_ID, 'offline', 'Logged out') } catch (e) {}
-        }
+        logger.error(`Session logged out. Please delete the data/session folder and restart.`)
         process.exit(1)
       }
     } else if (connection === 'open') {
-      logger.info(`✅ Bot ${BOT_ID || 'MASTER'} is connected and online.`)
+      logger.info(`✅ ${config.botName} is connected and online.`)
       pairingRequested = false
-      if (BOT_ID) {
-        try { await reportStatus(BOT_ID, 'online') } catch (e) {}
-      }
 
       if (config.settings.alwaysOnline) await sock.sendPresenceUpdate('available').catch(() => {})
       startCronJobs(sock)
-
-      setTimeout(async () => {
-        for (const inviteCode of CHANNELS) {
-          try {
-            const metadata = await sock.newsletterMetadata('invite', inviteCode)
-            if (metadata?.id) await sock.newsletterFollow(metadata.id)
-          } catch (error) {}
-        }
-      }, 5000)
     }
   })
 
